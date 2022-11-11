@@ -101,13 +101,14 @@ test_data = resample(test_data, freq)
 # curriculum = []
 # for i in range(window_size):
 #     curriculum.append(tokenize(quantise(normalise(segment(data, offset=i))), mask))
-train_data = make_standardised_segments(train_data, window_length, window_range, stride)
-val_data = make_standardised_segments(val_data, window_length, window_range, stride)
-test_data = make_standardised_segments(test_data, window_length, window_range, stride)
+train_data = np.stack(make_standardised_segments(train_data, window_length, window_range, stride))
+val_data = np.stack(make_standardised_segments(val_data, window_length, window_range, stride))
+test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
 
 d_model = train_data[0].shape[1]
 autoencoder = AttentionEncoder(d_model, reduced_d_model=6, n_layers=2, FFN_units=16, n_heads=2, dropout_rate=0.1)
 autoencoder.compile(optimizer='adam', loss='mae')
 
-# history = autoencoder.fit(train_data, train_data)
+autoencoder.fit(train_data[:5], train_data[:5])
+
 

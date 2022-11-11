@@ -44,7 +44,7 @@ class EncoderLayer(Layer):
     def build(self, input_shape):
         self.d_model = input_shape[-1]
         # Build the multihead layer
-        self.multi_head_attention = MultiHeadAttention(self.n_heads)
+        self.multi_head_attention = MultiHeadAttention(self.n_heads, key_dim=9)
         self.dropout_1 = Dropout(rate=self.dropout_rate)
         # Layer Normalization
         self.norm_1 = LayerNormalization(epsilon=1e-6)
