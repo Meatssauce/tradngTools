@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from Transformer import TSTransformerAutoEncoder
+from Components.Transformer import TSTransformerAutoEncoder
 
 from sklearn.preprocessing import MinMaxScaler
 

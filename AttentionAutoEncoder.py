@@ -1,20 +1,14 @@
-import numpy as np
 import tensorflow as tf
-from tensorflow import keras
 from keras.layers import (
     Dense,
     # MultiHeadAttention,
-    InputLayer,
-    LayerNormalization,
-    TimeDistributed,
     Layer,
     Dropout,
-    Embedding,
     Conv1D,
 )
 from keras.models import Model, Sequential
 
-from Transformer import PositionalEncoding, EncoderLayer, MultiHeadAttention
+from Components.Transformer import PositionalEncoding, EncoderLayer
 
 
 class SignalEncoder(Layer):
