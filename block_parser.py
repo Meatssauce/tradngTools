@@ -141,15 +141,15 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                     b = f.read(1).hex().upper()
                     tmpHex = b + tmpHex
                 inCount = int(tmpHex, 16)
-                resList.append('Inputs count = ' + tmpHex)
+                msg += 'Inputs count = ' + tmpHex
                 tmpHex += tmpB
                 RawTX = RawTX + reverse(tmpHex)
                 for m in range(inCount):
                     tmpHex = read_bytes(f, 32)
-                    resList.append('TX from hash = ' + tmpHex)
+                    msg += 'TX from hash = ' + tmpHex
                     RawTX = RawTX + reverse(tmpHex)
                     tmpHex = read_bytes(f, 4)
-                    resList.append('N output = ' + tmpHex)
+                    msg += 'N output = ' + tmpHex
                     RawTX = RawTX + reverse(tmpHex)
                     tmpHex = ''
                     b = f.read(1)
@@ -174,10 +174,10 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                     tmpHex = tmpHex + tmpB
                     RawTX = RawTX + reverse(tmpHex)
                     tmpHex = read_bytes(f, scriptLength, False)
-                    resList.append('Input script = ' + tmpHex)
+                    msg += 'Input script = ' + tmpHex
                     RawTX = RawTX + tmpHex
                     tmpHex = read_bytes(f, 4, False)
-                    resList.append('Sequence number = ' + tmpHex)
+                    mz += 'Sequence number = ' + tmpHex
                     RawTX = RawTX + tmpHex
                     tmpHex = ''
 
@@ -259,8 +259,7 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                 tmpHex = hashlib.new('sha256', tmpHex).digest()
                 tmpHex = tmpHex[::-1]
                 tmpHex = tmpHex.hex().upper()
-                resList.append('TX hash = ' + tmpHex)
-                tx_hashes.append(tmpHex)
+                msg += 'TX hash = ' + tmpHex
                 resList.append('')
                 tmpHex = ''
                 RawTX = ''
