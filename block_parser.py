@@ -15,9 +15,7 @@ def reverse(arr):
 
     result = ''
     for i in range(len(arr) // 2):
-        T = arr[i * 2] + arr[i * 2 + 1]
-        result = T + result
-        T = ''
+        result = arr[i * 2] + arr[i * 2 + 1] + result
     return result
 
 
@@ -42,14 +40,14 @@ def read_bytes(file, n, little_endian=True):
 
 
 def read_varint(file):
-    b = file.read(1)
-    bInt = int(b.hex(), 16)
+    bytes_ = file.read(1)
+    bInt = int(bytes_.hex(), 16)
     c = 0
     data = ''
 
     if bInt < 253:
         c = 1
-        data = b.hex().upper()
+        data = bytes_.hex().upper()
     elif bInt == 253:
         c = 3
     elif bInt == 254:
@@ -57,10 +55,8 @@ def read_varint(file):
     elif bInt == 255:
         c = 9
 
-    for j in range(1, c):
-        b = file.read(1)
-        b = b.hex().upper()
-        data = b + data
+    for _ in range(1, c):
+        data = file.read(1).hex().upper() + data
 
     return data
 
@@ -93,29 +89,28 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
             tmpHex = bytes.fromhex(tmpHex)
             tmpHex = hashlib.new('sha256', tmpHex).digest()
             tmpHex = hashlib.new('sha256', tmpHex).digest()
-            tmpHex = tmpHex[::-1]
-            tmpHex = tmpHex.hex().upper()
+            tmpHex = tmpHex[::-1].hex().upper()
             msg += 'SHA256 hash of the current block hash = ' + tmpHex + '\n'
 
             f.seek(tmpPos3, 0)
-            msg += 'Version number = ' + read_bytes(f, 4)
-            msg += 'SHA256 hash of the previous block hash = ' + read_bytes(f, 32)
-            msg += 'MerkleRoot hash = ' + read_bytes(f, 32)
+            msg += 'Version number = ' + read_bytes(f, 4) + '\n'
+            msg += 'SHA256 hash of the previous block hash = ' + read_bytes(f, 32) + '\n'
+            msg += 'MerkleRoot hash = ' + read_bytes(f, 32) + '\n'
 
             # MerkleRoot = tmpHex
-            msg += 'Time stamp = ' + read_bytes(f, 4)
-            msg += 'Difficulty = ' + read_bytes(f, 4)
-            resList.append('Random number = ' + read_bytes(f, 4))
+            msg += 'Time stamp = ' + read_bytes(f, 4) + '\n'
+            msg += 'Difficulty = ' + read_bytes(f, 4) + '\n'
+            msg += 'Random number = ' + read_bytes(f, 4) + '\n'
 
             txCount = int(read_varint(f), 16)
-            resList.append('Transactions count = ' + str(txCount))
+            msg += 'Transactions count = ' + str(txCount) + '\n'
 
             resList.append('')
             tmpHex = ''
             RawTX = ''
             tx_hashes = []
             for k in range(txCount):
-                resList.append('TX version number = ' + read_bytes(f, 4))
+                msg += 'TX version number = ' + read_bytes(f, 4) + '\n'
 
                 RawTX = reverse(tmpHex)
                 tmpHex = ''
@@ -136,16 +131,18 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                     c = 1
                     tmpHex = hex(bInt)[2:].upper().zfill(2)
                     tmpB = ''
-                if bInt == 253: c = 3
-                if bInt == 254: c = 5
-                if bInt == 255: c = 9
+                if bInt == 253:
+                    c = 3
+                if bInt == 254:
+                    c = 5
+                if bInt == 255:
+                    c = 9
                 for j in range(1, c):
-                    b = f.read(1)
-                    b = b.hex().upper()
+                    b = f.read(1).hex().upper()
                     tmpHex = b + tmpHex
                 inCount = int(tmpHex, 16)
                 resList.append('Inputs count = ' + tmpHex)
-                tmpHex = tmpHex + tmpB
+                tmpHex += tmpB
                 RawTX = RawTX + reverse(tmpHex)
                 for m in range(inCount):
                     tmpHex = read_bytes(f, 32)
@@ -163,9 +160,12 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                         c = 1
                         tmpHex = b.hex().upper()
                         tmpB = ''
-                    if bInt == 253: c = 3
-                    if bInt == 254: c = 5
-                    if bInt == 255: c = 9
+                    if bInt == 253:
+                        c = 3
+                    if bInt == 254:
+                        c = 5
+                    if bInt == 255:
+                        c = 9
                     for j in range(1, c):
                         b = f.read(1)
                         b = b.hex().upper()
@@ -180,6 +180,7 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                     resList.append('Sequence number = ' + tmpHex)
                     RawTX = RawTX + tmpHex
                     tmpHex = ''
+
                 b = f.read(1)
                 tmpB = b.hex().upper()
                 bInt = int(b.hex(), 16)
@@ -188,17 +189,22 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                     c = 1
                     tmpHex = b.hex().upper()
                     tmpB = ''
-                if bInt == 253: c = 3
-                if bInt == 254: c = 5
-                if bInt == 255: c = 9
+                if bInt == 253:
+                    c = 3
+                if bInt == 254:
+                    c = 5
+                if bInt == 255:
+                    c = 9
                 for j in range(1, c):
                     b = f.read(1)
                     b = b.hex().upper()
                     tmpHex = b + tmpHex
+
                 outputCount = int(tmpHex, 16)
                 tmpHex = tmpHex + tmpB
                 resList.append('Outputs count = ' + str(outputCount))
                 RawTX = RawTX + reverse(tmpHex)
+
                 for m in range(outputCount):
                     tmpHex = read_bytes(f, 8)
                     Value = tmpHex
@@ -212,9 +218,12 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
                         c = 1
                         tmpHex = b.hex().upper()
                         tmpB = ''
-                    if bInt == 253: c = 3
-                    if bInt == 254: c = 5
-                    if bInt == 255: c = 9
+                    if bInt == 253:
+                        c = 3
+                    if bInt == 254:
+                        c = 5
+                    if bInt == 255:
+                        c = 9
                     for j in range(1, c):
                         b = f.read(1)
                         b = b.hex().upper()
@@ -242,7 +251,7 @@ for filename in sorted(x for x in os.listdir(dirA) if x.endswith('.dat') and x.s
 
                 Witness = False
                 tmpHex = read_bytes(f, 4)
-                resList.append('Lock time = ' + tmpHex)
+                msg += 'Lock time = ' + tmpHex
                 RawTX = RawTX + reverse(tmpHex)
                 tmpHex = RawTX
                 tmpHex = bytes.fromhex(tmpHex)
