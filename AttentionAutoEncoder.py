@@ -1,11 +1,20 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from keras.layers import (MultiHeadAttention, Dense, InputLayer, LayerNormalization, TimeDistributed, Layer, Dropout,
-                          Embedding, Conv1D)
+from keras.layers import (
+    Dense,
+    # MultiHeadAttention,
+    InputLayer,
+    LayerNormalization,
+    TimeDistributed,
+    Layer,
+    Dropout,
+    Embedding,
+    Conv1D,
+)
 from keras.models import Model, Sequential
 
-from Transformer import PositionalEncoding, EncoderLayer
+from Transformer import PositionalEncoding, EncoderLayer, MultiHeadAttention
 
 
 class SignalEncoder(Layer):
@@ -61,7 +70,7 @@ class CompressiveEncoder(Layer):
         self.ffn1 = Dense(units=FFN_units, activation="relu")
         self.ffn2 = Dense(units=reduced_d_model, activation="relu")
 
-    def create_padding_mask(self, seq, *args):  #seq: (batch_size, seq_length)
+    def create_padding_mask(self, seq, *args):  # seq: (batch_size, seq_length)
         # Create the mask for padding
         mask = tf.cast(tf.math.equal(seq, 0), tf.float32)
         return mask[:, tf.newaxis, tf.newaxis, :]
@@ -69,8 +78,10 @@ class CompressiveEncoder(Layer):
     def call(self, enc_inputs, training):
         # Create the padding mask for the encoder
         enc_mask = self.create_padding_mask(enc_inputs)
+
         # Call the encoder
         enc_outputs = self.encoder(enc_inputs, enc_mask, training)
+
         # Call the ffn compressor
         outputs = self.ffn1(enc_outputs)
         outputs = self.ffn2(outputs)

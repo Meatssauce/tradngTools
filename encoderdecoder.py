@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from AttentionAutoEncoder import AttentionEncoder
+from Transformer import TSTransformerAutoEncoder
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -106,9 +106,13 @@ val_data = np.stack(make_standardised_segments(val_data, window_length, window_r
 test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
 
 d_model = train_data[0].shape[1]
-autoencoder = AttentionEncoder(d_model, reduced_d_model=6, n_layers=2, FFN_units=16, n_heads=2, dropout_rate=0.1)
+autoencoder = TSTransformerAutoEncoder(vocab_size_enc=1000,
+                                       vocab_size_dec=500,
+                                       d_model=5012,
+                                       n_layers=4,
+                                       FFN_units=2048,
+                                       n_heads=8,
+                                       dropout_rate=0.1)
 autoencoder.compile(optimizer='adam', loss='mae')
 
 autoencoder.fit(train_data[:5], train_data[:5])
-
-
