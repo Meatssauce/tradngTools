@@ -1,10 +1,8 @@
 import numpy as np
 import pandas as pd
-from Components.Transformer import TSTransformerAutoEncoder
+import tensorflow as tf
 
 from sklearn.preprocessing import MinMaxScaler
-
-from stock_indicators.indicators.common.quote import Quote
 
 
 def vectorized_stride(array, length, stride):
@@ -25,14 +23,14 @@ def vectorized_stride(array, length, stride):
 # vectorized_stride(arr, length=4, stride=4)
 
 
-def add_features(df):
-    quotes_list = [
-        Quote(d, o, h, l, c, v)
-        for d, o, h, l, c, v
-        in zip(df['Timestamp'], df['Open'], df['High'], df['Low'], df['Close'], df['Volume_(Currency)'])
-    ]
-    ...
-    return ...
+# def add_features(df):
+#     quotes_list = [
+#         Quote(d, o, h, l, c, v)
+#         for d, o, h, l, c, v
+#         in zip(df['Timestamp'], df['Open'], df['High'], df['Low'], df['Close'], df['Volume_(Currency)'])
+#     ]
+#     ...
+#     return ...
 
 
 def make_standardised_segments(df, segment_len, segment_amp_range, stride):
@@ -79,18 +77,19 @@ def resample(df, freq):
 raw_data = pd.read_csv('bitstampUSD_1-min_data_2012-01-01_to_2021-03-31.csv', index_col='Timestamp')  # min by min
 raw_data.index = pd.to_datetime(raw_data.index, unit='s')
 
+
 # data['Missing'] = data.isna().any(axis=1).astype(int)
 data = raw_data.interpolate(method='index')
 # todo: show how much is interpolated
-data = data[['Open', 'High', 'Low', 'Close', 'Volume_(Currency)']]
+data = data[['Open', 'High', 'Low', 'Close', 'Volume_(Currency)']].astype(float)
 
-window_length = int(5 * 30 * 24 / 4)
-# stride = int(10 / 25 * window_length)
+# window_length = int(5 * 30 * 24 / 4)
+window_length = 512
 stride = 16
 window_range = (-1, 1)
 
-train_data, val_data = ts_train_test_split(data, test_size=0.3, gap_size=window_length)
-val_data, test_data = ts_train_test_split(val_data, test_size=0.15 * 0.3, gap_size=stride)
+train_data, val_data = ts_train_test_split(data, test_size=0.3, gap_size=stride)
+val_data, test_data = ts_train_test_split(val_data, test_size=0.5, gap_size=stride)
 
 freq = '15min'
 train_data = resample(train_data, freq)
@@ -105,14 +104,38 @@ train_data = np.stack(make_standardised_segments(train_data, window_length, wind
 val_data = np.stack(make_standardised_segments(val_data, window_length, window_range, stride))
 test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
 
-d_model = train_data[0].shape[1]
-autoencoder = TSTransformerAutoEncoder(vocab_size_enc=1000,
-                                       vocab_size_dec=500,
-                                       d_model=5012,
-                                       n_layers=4,
-                                       FFN_units=2048,
-                                       n_heads=8,
-                                       dropout_rate=0.1)
-autoencoder.compile(optimizer='adam', loss='mae')
 
-autoencoder.fit(train_data[:5], train_data[:5])
+model = tf.keras.Sequential(
+    [
+        tf.keras.layers.Input(shape=(512, 5)),
+        tf.keras.layers.Conv1D(
+            filters=32, kernel_size=7, padding="same", strides=2, activation="relu"
+        ),
+        tf.keras.layers.Dropout(rate=0.2),
+        tf.keras.layers.Conv1D(
+            filters=16, kernel_size=7, padding="same", strides=2, activation="relu"
+        ),
+        tf.keras.layers.Conv1DTranspose(
+            filters=16, kernel_size=7, padding="same", strides=2, activation="relu"
+        ),
+        tf.keras.layers.Dropout(rate=0.2),
+        tf.keras.layers.Conv1DTranspose(
+            filters=32, kernel_size=7, padding="same", strides=2, activation="relu"
+        ),
+        tf.keras.layers.Conv1DTranspose(filters=5, kernel_size=7, padding="same"),
+    ]
+)
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss="mse")
+model.summary()
+
+history = model.fit(
+    train_data,
+    train_data,
+    batch_size=128,
+    epochs=50,
+    validation_data=(val_data, val_data),
+    callbacks=[
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=5, mode="min")
+    ],
+    verbose=1
+)

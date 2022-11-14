@@ -10,7 +10,7 @@ from keras.layers import (
     Layer,
     Dropout,
     Embedding,
-    Conv1D,
+    Conv1D, Reshape,
 )
 from keras.models import Model, Sequential
 
@@ -156,7 +156,7 @@ class EncoderLayer(Layer):
         # Layer normalization
         self.norm_2 = LayerNormalization(epsilon=1e-6)
 
-    def call(self, inputs, mask, training):
+    def call(self, inputs, training=None, mask=None):
         # Forward pass of the multi-head attention
         attention = self.multi_head_attention(inputs,
                                               inputs,
@@ -204,7 +204,7 @@ class Encoder(Layer):
                                         dropout_rate)
                            for _ in range(n_layers)]
 
-    def call(self, inputs, mask, training):
+    def call(self, inputs, training=None, mask=None):
         # Get the embedding vectors
         outputs = self.embedding(inputs)
 
@@ -217,7 +217,7 @@ class Encoder(Layer):
 
         # Call the stacked layers
         for i in range(self.n_layers):
-            outputs = self.enc_layers[i](outputs, mask, training)
+            outputs = self.enc_layers[i](outputs, training=training, mask=mask)
 
         return outputs
 
@@ -384,7 +384,7 @@ class Transformer(Model):
         dec_mask_2 = self.create_padding_mask(enc_inputs)
 
         # Call the encoder
-        enc_outputs = self.encoder(enc_inputs, enc_mask, training)
+        enc_outputs = self.encoder(enc_inputs, training=training, mask=enc_mask)
 
         # Call the decoder
         dec_outputs = self.decoder(dec_inputs,
@@ -401,9 +401,10 @@ class Transformer(Model):
 
 class TSTransformerAutoEncoder(Model):
     def __init__(self,
-                 vocab_size_enc,
-                 vocab_size_dec,
-                 d_model,
+                 input_shape,
+                 vocab_size,
+                 d_embedding,
+                 d_compressed,
                  n_layers,
                  FFN_units,
                  n_heads,
@@ -411,71 +412,51 @@ class TSTransformerAutoEncoder(Model):
                  name="ts_transformer_autoencoder"):
         super().__init__(name=name)
 
+        if input_shape[-2] < d_compressed:
+            raise ValueError('bottleneck must be smaller than input length')
+
+        d_compressed_0 = int((input_shape[-2] + d_compressed) / 2)
+
         # Build the encoder
-        self.encoder = Sequential([Conv1D(1, kernel_size=3, activation='gelu'),
-                                   Conv1D(1, kernel_size=3, activation='gelu', strides=2),
-                                   Encoder(n_layers,
-                                           FFN_units,
-                                           n_heads,
-                                           dropout_rate,
-                                           vocab_size_enc,
-                                           d_model),
-                                   Dense(d_model // 2, activation='relu'),
-                                   Dense(d_model, activation='relu')])
+        # self.encoder = Sequential([])
+        self.conv = Conv1D(1, kernel_size=3, activation='gelu')
+        self.conv2 = Conv1D(1, kernel_size=3, activation='gelu', strides=2)
+        self.enc = Encoder(n_layers,
+                           FFN_units=FFN_units,
+                           n_heads=n_heads,
+                           dropout_rate=dropout_rate,
+                           vocab_size=vocab_size,
+                           d_model=d_embedding)
+        self.ffn = Dense(d_compressed_0, activation='relu')
+        self.ffn2 = Dense(d_compressed, activation='relu')
 
         # Build the decoder
-        self.decoder = Sequential([Dense(d_model // 2, activation='relu'),
-                                   Dense(d_model, activation='sigmoid'),
-                                   Decoder(n_layers,
-                                           FFN_units,
-                                           n_heads,
-                                           dropout_rate,
-                                           vocab_size_dec,
-                                           d_model)])
-
-        # build the linear transformation and softmax function
-        self.last_linear = Dense(units=vocab_size_dec, name="lin_ouput")
+        self.decoder = Sequential([Dense(d_compressed, activation='relu'),
+                                   Dense(d_compressed_0, activation='sigmoid'),
+                                   Dense(input_shape[-1] * input_shape[-2], activation='relu'),
+                                   Reshape(input_shape[1:])])
 
     def create_padding_mask(self, seq):  # seq: (batch_size, seq_length)
         # Create the mask for padding
         mask = tf.cast(tf.math.equal(seq, 0), tf.float32)
         return mask[:, tf.newaxis, tf.newaxis, :]
 
-    def create_look_ahead_mask(self, seq):
-        # Create the mask for the causal attention
-        seq_len = tf.shape(seq)[1]
-        look_ahead_mask = 1 - tf.linalg.band_part(tf.ones((seq_len, seq_len)), -1, 0)
-        return look_ahead_mask
-
-    def call(self, enc_inputs, dec_inputs, training):
+    def call(self, enc_inputs, training=None, mask=None):
         # Create the padding mask for the encoder
         enc_mask = self.create_padding_mask(enc_inputs)
 
-        # Create the mask for the causal attention
-        dec_mask_1 = tf.maximum(
-            self.create_padding_mask(dec_inputs),
-            self.create_look_ahead_mask(dec_inputs)
-        )
+        # enc_outputs = self.encoder(enc_inputs, training=training, mask=enc_mask)
+        x = self.conv(enc_inputs)
+        x = self.conv2(x)
+        x = self.enc(x, mask=enc_mask, training=training)
+        x = self.ffn(x)
+        x = self.ffn2(x)
+        dec_outputs = self.decoder(x)
 
-        # Create the mask for the encoder-decoder attention
-        dec_mask_2 = self.create_padding_mask(enc_inputs)
+        return dec_outputs
 
-        # Call the encoder
-        enc_outputs = self.encoder(enc_inputs, enc_mask, training)
-
-        # Call the decoder
-        dec_outputs = self.decoder(dec_inputs,
-                                   enc_outputs,
-                                   dec_mask_1,
-                                   dec_mask_2,
-                                   training)
-
-        # Call the Linear and Softmax functions
-        outputs = self.last_linear(dec_outputs)
-
-        return outputs
-
-# Note: d_model=512 is size of a single internal token embedding?
+# Note: d_model=512 is size of a single input
+# Note: d_model in the model parameter is the size of a single internal token embedding
 # Note: vocab_size= is the size of the alphabet for the embedding layer that processes tokens into embeddings
 # Note: FFN_unit=2048 is size first Dense layer before residual addition and normalisation for each enc and dec layer
 # Note: n_heads=8 is number of parallel attentions
