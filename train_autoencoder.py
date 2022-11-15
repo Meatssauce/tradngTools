@@ -113,24 +113,51 @@ train_data = np.stack(make_standardised_segments(train_data, window_length, wind
 val_data = np.stack(make_standardised_segments(val_data, window_length, window_range, stride))
 test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
 
+kernel_size = 5
+
 model = tf.keras.Sequential(
     [
         tf.keras.layers.Input(shape=(512, 5)),
+        # tf.keras.layers.Conv1D(
+        #     filters=16, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        # tf.keras.layers.Dropout(rate=0.2),
+        # tf.keras.layers.Conv1D(
+        #     filters=32, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        # tf.keras.layers.Dropout(rate=0.2),
+        # tf.keras.layers.Conv1D(
+        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        # tf.keras.layers.Dropout(rate=0.2),
         tf.keras.layers.Conv1D(
-            filters=32, kernel_size=7, padding="same", strides=2, activation="relu"
+            filters=32, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
         ),
         tf.keras.layers.Dropout(rate=0.2),
         tf.keras.layers.Conv1D(
-            filters=16, kernel_size=7, padding="same", strides=2, activation="relu"
+            filters=16, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
         ),
+
         tf.keras.layers.Conv1DTranspose(
-            filters=16, kernel_size=7, padding="same", strides=2, activation="relu"
+            filters=16, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
         ),
         tf.keras.layers.Dropout(rate=0.2),
         tf.keras.layers.Conv1DTranspose(
-            filters=32, kernel_size=7, padding="same", strides=2, activation="relu"
+            filters=32, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
         ),
-        tf.keras.layers.Conv1DTranspose(filters=5, kernel_size=7, padding="same"),
+        # tf.keras.layers.Dropout(rate=0.2),
+        # tf.keras.layers.Conv1DTranspose(
+        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        # tf.keras.layers.Dropout(rate=0.2),
+        # tf.keras.layers.Conv1DTranspose(
+        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        # tf.keras.layers.Dropout(rate=0.2),
+        # tf.keras.layers.Conv1DTranspose(
+        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
+        # ),
+        tf.keras.layers.Conv1DTranspose(filters=5, kernel_size=kernel_size, padding="same"),
     ]
 )
 model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss="mse")
@@ -160,8 +187,8 @@ test_pred = model.predict(test_data)
 
 for i, title in enumerate(['Open', 'High', 'Low', 'Close', 'Volume']):
     plt.title(title)
-    plt.plot(test_data[0, :, i], label='original')
-    plt.plot(test_pred[0, :, i], label='reconstructed')
+    plt.plot(test_data[1000, :, i], label='original')
+    plt.plot(test_pred[1000, :, i], label='reconstructed')
     plt.legend()
     plt.savefig(os.path.join(output_dir, title + '.png'))
     plt.show()
