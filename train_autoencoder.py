@@ -1,6 +1,10 @@
+import os
+import pickle
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -77,9 +81,9 @@ def resample(df, freq):
 raw_data = pd.read_csv('bitstampUSD_1-min_data_2012-01-01_to_2021-03-31.csv', index_col='Timestamp')  # min by min
 raw_data.index = pd.to_datetime(raw_data.index, unit='s')
 
-
+data = raw_data.reindex(pd.date_range(raw_data.index.min(), raw_data.index.max(), freq='min'), fill_value=np.nan)
 # data['Missing'] = data.isna().any(axis=1).astype(int)
-data = raw_data.interpolate(method='index')
+data = data.interpolate(method='index')
 # todo: show how much is interpolated
 data = data[['Open', 'High', 'Low', 'Close', 'Volume_(Currency)']].astype(float)
 
@@ -100,10 +104,14 @@ test_data = resample(test_data, freq)
 # curriculum = []
 # for i in range(window_size):
 #     curriculum.append(tokenize(quantise(normalise(segment(data, offset=i))), mask))
+
+train_time_period = train_data.index
+val_time_period = val_data.index
+test_time_period = test_data.index
+
 train_data = np.stack(make_standardised_segments(train_data, window_length, window_range, stride))
 val_data = np.stack(make_standardised_segments(val_data, window_length, window_range, stride))
 test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
-
 
 model = tf.keras.Sequential(
     [
@@ -139,3 +147,21 @@ history = model.fit(
     ],
     verbose=1
 )
+
+# Save training logs
+
+output_dir = 'trainingLog'
+os.makedirs(output_dir, exist_ok=True)
+
+with open(os.path.join(output_dir, 'trainHistoryDict.pkl'), 'wb') as f:
+    pickle.dump(history.history, f)
+
+test_pred = model.predict(test_data)
+
+for i, title in enumerate(['Open', 'High', 'Low', 'Close', 'Volume']):
+    plt.title(title)
+    plt.plot(test_data[0, :, i], label='original')
+    plt.plot(test_pred[0, :, i], label='reconstructed')
+    plt.legend()
+    plt.savefig(os.path.join(output_dir, title + '.png'))
+    plt.show()
