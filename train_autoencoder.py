@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 
@@ -7,6 +8,8 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import MinMaxScaler
+
+from mydata import load_data
 
 
 def vectorized_stride(array, length, stride):
@@ -78,12 +81,13 @@ def resample(df, freq):
     })
 
 
-raw_data = pd.read_csv('bitstampUSD_1-min_data_2012-01-01_to_2021-03-31.csv', index_col='Timestamp')  # min by min
-raw_data.index = pd.to_datetime(raw_data.index, unit='s')
+raw_data = load_data('btc')
+raw_data['Timestamp'] = pd.to_datetime(raw_data['Timestamp'], unit='s')
+raw_data = raw_data.set_index('Timestamp')
+raw_data = raw_data.reindex(pd.date_range(raw_data.index.min(), raw_data.index.max(), freq='min'), fill_value=np.nan)
 
-data = raw_data.reindex(pd.date_range(raw_data.index.min(), raw_data.index.max(), freq='min'), fill_value=np.nan)
 # data['Missing'] = data.isna().any(axis=1).astype(int)
-data = data.interpolate(method='index')
+data = raw_data.interpolate(method='index')
 # todo: show how much is interpolated
 data = data[['Open', 'High', 'Low', 'Close', 'Volume_(Currency)']].astype(float)
 
@@ -160,6 +164,15 @@ model = tf.keras.Sequential(
         tf.keras.layers.Conv1DTranspose(filters=5, kernel_size=kernel_size, padding="same"),
     ]
 )
+
+# lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
+#     initial_learning_rate=0.01,
+#     decay_steps=10000,
+#     end_learning_rate=0.00001,
+#     power=1.0,
+#     cycle=False,
+#     name=None
+# )
 model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss="mse")
 model.summary()
 
@@ -180,8 +193,10 @@ history = model.fit(
 output_dir = 'trainingLog'
 os.makedirs(output_dir, exist_ok=True)
 
-with open(os.path.join(output_dir, 'trainHistoryDict.pkl'), 'wb') as f:
-    pickle.dump(history.history, f)
+with open(os.path.join(output_dir, 'trainHistoryDict.json'), 'w') as f:
+    json.dump(history.history, f)
+
+print(model.evaluate(test_data, test_data))
 
 test_pred = model.predict(test_data)
 
