@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import IO
 
+from base58check import b58encode, b58decode
+
 from opcodes import Opcode
 
 
@@ -75,6 +77,17 @@ class Input:
         return self.tx_id == '0' * 64 and self.vout == 'f' * 8
 
 
+def hex2Base58(hex_num: str):
+    ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    sb = ''
+    hex_num = int(hex_num, base=16)
+    while hex_num > 0:
+        r = hex_num % 58
+        sb += ALPHABET[r]
+        hex_num = hex_num // 58
+    return sb[::-1]
+
+
 @dataclass(frozen=True)
 class Output:
     value: int  # amount of BTC in satoshis.
@@ -104,8 +117,12 @@ class Output:
             return list(key_search.groups())
 
         for pattern in [p2pkh, p2pk, p2sh]:
-            if key_search := re.search(pattern, self.scriptPubKey):
+            if not (key_search := re.search(pattern, self.scriptPubKey)):
+                continue
+            if pattern == p2pk:
                 return [key_search.group(1)]
+            else:
+                return [b58encode(bytes.fromhex(key_search.group(1))).hex()]
 
         return []
 

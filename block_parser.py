@@ -124,15 +124,25 @@ def update_ledger(block: Block, past_tx: dict[str, list], utxo: defaultdict[any,
             txo_being_spent = past_tx[input_.tx_id][input_.vout - 1]
 
             for sender in txo_being_spent.recipients:
-                utxo[sender].remove(txo_being_spent)
-                balances[sender] -= txo_being_spent.value
+                sender_address = key2address(sender)
+                utxo[sender_address].remove(txo_being_spent)
+                balances[sender_address] -= txo_being_spent.value
 
         for output in tx.outputs:
             for recipient in output.recipients:
-                utxo[recipient].add(output)
-                balances[recipient] += output.value
+                recipient_address = key2address(recipient)
+                utxo[recipient_address].add(output)
+                balances[recipient_address] += output.value
 
     return utxo, balances
+
+
+def key2address(key):
+
+
+
+def address2key(address):
+    pass
 
 
 def build_ledger_history(blocks_dir: str, end: int):
