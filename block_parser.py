@@ -137,14 +137,6 @@ def update_ledger(block: Block, past_tx: dict[str, list], utxo: defaultdict[any,
     return utxo, balances
 
 
-def key2address(key):
-
-
-
-def address2key(address):
-    pass
-
-
 def build_ledger_history(blocks_dir: str, end: int):
     """Build history of account balances from Bitcoin blocks"""
 

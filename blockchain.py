@@ -1,8 +1,7 @@
+from hashlib import sha256
 import re
 from dataclasses import dataclass
 from typing import IO
-
-from base58check import b58encode, b58decode
 
 from opcodes import Opcode
 
@@ -77,15 +76,34 @@ class Input:
         return self.tx_id == '0' * 64 and self.vout == 'f' * 8
 
 
-def hex2Base58(hex_num: str):
-    ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+def hex2Base58(payload: str):
+    """Converts a hex string into a base58 string
+
+    :param payload: the hexadecimal string to be converted
+    :return: corresponding base58 string
+    """
+
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     sb = ''
-    hex_num = int(hex_num, base=16)
-    while hex_num > 0:
-        r = hex_num % 58
-        sb += ALPHABET[r]
-        hex_num = hex_num // 58
+    payload = int(payload, base=16)
+    while payload > 0:
+        r = payload % 58
+        sb += alphabet[r]
+        payload = payload // 58
     return sb[::-1]
+
+
+def key2Address(payload: str, version: int):
+    """Convert public key hash to bitcoin address
+
+    :param payload: public key to be converted (hexadecimal)
+    :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
+    :return: corresponding bitcoin address (Base58Check)
+    """
+
+    prefix = f'{version:0{2}x}'
+    checksum = sha256(bytes.fromhex(prefix + payload)).digest()[:4].hex()  # checksum only take first 4 bytes
+    return hex2Base58(prefix + payload + checksum)
 
 
 @dataclass(frozen=True)
@@ -100,7 +118,6 @@ class Output:
         scriptPubKey_size = read_varint(file)
         scriptPubKey = file.read(scriptPubKey_size).hex()
         return cls(value, scriptPubKey_size, scriptPubKey)
-
 
     @property
     def recipients(self):
@@ -122,7 +139,7 @@ class Output:
             if pattern == p2pk:
                 return [key_search.group(1)]
             else:
-                return [b58encode(bytes.fromhex(key_search.group(1))).hex()]
+                return [key2Address(key_search.group(1), version='1' if pattern == 'pkh' else '3')]
 
         return []
 
