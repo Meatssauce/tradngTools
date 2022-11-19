@@ -9,7 +9,7 @@ from typing import IO
 
 from tqdm import tqdm
 
-from Block import Block, Output
+from blockchain import Block, Output
 from opcodes import Opcode
 
 
@@ -115,51 +115,72 @@ def read_dat(filepath: str):
                 break
 
 
-def update_ledger(block: Block, past_tx: dict[str, list], utxo: defaultdict[any, set], balances: dict[str, float]):
+def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defaultdict[any, set],
+                  balances: defaultdict[str, float]):
     for tx in block.transactions:
         for input_ in tx.inputs:
             if input_.is_coinbase():
                 continue
 
-            txo_being_spent = past_tx[input_.tx_id][input_.vout - 1]
+            txo_being_spent = past_outputs[input_.id][input_.vout - 1]
 
             for sender in txo_being_spent.recipients:
-                sender_address = key2address(sender)
-                utxo[sender_address].remove(txo_being_spent)
-                balances[sender_address] -= txo_being_spent.value
+                if not sender:
+                    continue
+
+                if sender in utxo:
+                    utxo[sender].remove(txo_being_spent)
+                else:
+                    utxo[sender] = set()
+
+                if sender in balances:
+                    balances[sender] -= txo_being_spent.value
+                else:
+                    balances[sender] = -txo_being_spent.value
 
         for output in tx.outputs:
             for recipient in output.recipients:
-                recipient_address = key2address(recipient)
-                utxo[recipient_address].add(output)
-                balances[recipient_address] += output.value
+                if not recipient:
+                    continue
 
-    return utxo, balances
+                if recipient in utxo:
+                    utxo[recipient].add(output)
+                else:
+                    utxo[recipient] = {output}
+
+                if recipient in balances:
+                    balances[recipient] += output.value
+                else:
+                    balances[recipient] = output.value
+
+            past_outputs[tx.id].append(output)
+
+    return utxo, balances, past_outputs
 
 
 def build_ledger_history(blocks_dir: str, end: int):
     """Build history of account balances from Bitcoin blocks"""
 
-    past_tx = {}
+    past_outputs = defaultdict(list)
     utxo = defaultdict(set)
-    balances = {}
+    balances = defaultdict(float)
     block_height = 0
 
-    for filename in tqdm(glob.glob(os.path.join(blocks_dir, 'blk*.dat'))):
-        filepath = os.path.join(blocks_dir, filename)
-
+    for filepath in tqdm(glob.glob(os.path.join(blocks_dir, 'blk*.dat'))):
         for block in read_dat(filepath):
             if block_height >= end - 1:
                 return utxo, balances
 
-            utxo, balances = update_ledger(block, past_tx, utxo, balances)
+            utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
             block_height += 1
 
     return utxo, balances
 
 
 def main():
-    pass
+    utxo, balances = build_ledger_history('datasets/blocks', 1000)
+    print(f'{utxo=}')
+    print(f'{balances=}')
 
 
 if __name__ == '__main__':
