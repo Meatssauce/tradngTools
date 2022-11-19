@@ -1,3 +1,4 @@
+import fileinput
 import glob
 import hashlib
 import os
@@ -11,6 +12,7 @@ from tqdm import tqdm
 
 from blockchain import Block, Output
 from opcodes import Opcode
+from tools import ReadableFileInput
 
 
 def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648c1709e41890f8c44
@@ -106,8 +108,8 @@ def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648
 #             'merkle_root': merkle_root, 'time': time_, 'bits': bits, 'nonce': nonce, 'transactions': transactions}
 
 
-def read_dat(filepath: str):
-    with open(filepath, 'rb') as f:
+def read_dat(filepaths: [str]):
+    with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
         while True:
             try:
                 yield Block.from_file(f)
@@ -122,7 +124,11 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defa
             if input_.is_coinbase():
                 continue
 
-            txo_being_spent = past_outputs[input_.id][input_.vout - 1]
+            try:
+                txo_being_spent = past_outputs[input_.tx_id][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
+            except IndexError:
+                print(len(past_outputs[input_.tx_id]))
+                raise
 
             for sender in txo_being_spent.recipients:
                 if not sender:
@@ -158,7 +164,7 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defa
     return utxo, balances, past_outputs
 
 
-def build_ledger_history(blocks_dir: str, end: int):
+def build_ledger_history(blocks_dir: str, end: int = None):
     """Build history of account balances from Bitcoin blocks"""
 
     past_outputs = defaultdict(list)
@@ -166,13 +172,14 @@ def build_ledger_history(blocks_dir: str, end: int):
     balances = defaultdict(float)
     block_height = 0
 
-    for filepath in tqdm(glob.glob(os.path.join(blocks_dir, 'blk*.dat'))):
-        for block in read_dat(filepath):
-            if block_height >= end - 1:
-                return utxo, balances
+    filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
-            utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
-            block_height += 1
+    for block in read_dat(filepaths):
+        if end is not None and block_height >= end - 1:
+            return utxo, balances
+
+        utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
+        block_height += 1
 
     return utxo, balances
 

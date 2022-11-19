@@ -1,3 +1,4 @@
+import fileinput
 from hashlib import sha256
 import re
 from dataclasses import dataclass
@@ -60,7 +61,7 @@ def varint2Bytes(num: int):
 @dataclass(frozen=True)
 class Input:
     tx_id: str  # that of a tx whose output we take as input
-    vout: str  # index of input as an output in the tx
+    vout: int  # index of input as an output in the tx
     scriptSig_size: int  # number of bytes
     scriptSig: str
     sequence: str  # ignored
@@ -68,7 +69,7 @@ class Input:
     @classmethod
     def from_file(cls, file: IO):
         tx_id = file.read(32)[::-1].hex()
-        vout = file.read(4)[::-1].hex()
+        vout = int(file.read(4)[::-1].hex(), base=16)
         scriptSig_size = read_varint(file)
         scriptSig = file.read(scriptSig_size).hex()
         sequence = file.read(4)[::-1].hex()
@@ -94,12 +95,12 @@ class Input:
     #     return cls(tx_id, vout, scriptSig_size, scriptSig, sequence)
 
     def to_bytes(self):
-        data = bytes.fromhex(self.tx_id)[::-1] + bytes.fromhex(self.vout)[::-1] + varint2Bytes(self.scriptSig_size) + \
-               bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
+        data = bytes.fromhex(self.tx_id)[::-1] + bytes.fromhex(hex2(self.vout))[::-1] + \
+               varint2Bytes(self.scriptSig_size) + bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
         return data
 
     def is_coinbase(self):
-        return self.tx_id == '0' * 64 and self.vout == 'f' * 8
+        return self.tx_id == '0' * 64 and self.vout == 4294967295  # int('f' * 8, base=16)
 
 
 # 8def hex2Base58(payload: str):
@@ -219,8 +220,8 @@ class Transaction:
                bytes.fromhex(self.locktime)[::-1]
         return data
 
-    def is_coinbase(self):
-        return len(self.inputs) == 1 and self.inputs[0].id == '0' * 64 and self.inputs[0].vout == 'f' * 8
+    # def is_coinbase(self):
+    #     return len(self.inputs) == 1 and self.inputs[0].tx_id == '0' * 64 and self.inputs[0].vout == int('f' * 8, base=16)
 
 
 @dataclass(frozen=True)
@@ -241,10 +242,9 @@ class Block:
     transactions: [Transaction]
 
     @classmethod
-    def from_file(cls, file: IO):
+    def from_file(cls, file: IO | fileinput.FileInput):
         magic_bytes = file.read(4)[::-1].hex()
         size = int(file.read(4)[::-1].hex(), base=16)
-
         # block_header = f.read(80).hex()
 
         version = file.read(4)[::-1].hex()
@@ -262,16 +262,16 @@ class Block:
                    tx_count, transactions)
 
     def to_bytes(self):
-        magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
-        size = bytes.fromhex(hex2(self.size))[::-1]
-        version = bytes.fromhex(self.version)[::-1]
-        pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
-        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        time_ = bytes.fromhex(self.time_)[::-1]
-        bits = bytes.fromhex(self.bits)[::-1]
-        nonce = bytes.fromhex(self.nonce)[::-1]
-        tx_count = varint2Bytes(self.tx_count)
-        transactions = b''.join(tx.to_bytes() for tx in self.transactions)
+        # magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
+        # size = bytes.fromhex(hex2(self.size))[::-1]
+        # version = bytes.fromhex(self.version)[::-1]
+        # pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
+        # merkle_root = bytes.fromhex(self.merkle_root)[::-1]
+        # time_ = bytes.fromhex(self.time_)[::-1]
+        # bits = bytes.fromhex(self.bits)[::-1]
+        # nonce = bytes.fromhex(self.nonce)[::-1]
+        # tx_count = varint2Bytes(self.tx_count)
+        # transactions = b''.join(tx.to_bytes() for tx in self.transactions)
         data = bytes.fromhex(self.magic_bytes)[::-1] + bytes.fromhex(hex2(self.size))[::-1] + \
                bytes.fromhex(self.version)[::-1] + bytes.fromhex(self.prev_block_hash)[::-1] + \
                bytes.fromhex(self.merkle_root)[::-1] + bytes.fromhex(self.time_)[::-1] + \

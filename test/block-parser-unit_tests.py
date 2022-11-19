@@ -39,19 +39,19 @@ def test_varint2Bytes():
 def test_read_and_inverse_read():
     block_path = '../datasets/blocks/blk00000.dat'
 
-    block = next(read_dat(block_path))
+    block = next(read_dat([block_path]))
     reconstructed = block.to_bytes()
 
-    assert reconstructed == next(read_dat(block_path)).to_bytes()
+    assert reconstructed == next(read_dat([block_path])).to_bytes()
 
 
 def test_read_and_inverse_read_all():
     block_path = '../datasets/blocks/blk00000.dat'
 
-    blocks = list(read_dat(block_path))
+    blocks = list(read_dat([block_path]))
     reconstructed = b''.join(block.to_bytes() for block in blocks)
 
-    with open(block_path, 'wb') as f:
+    with open(block_path, 'rb') as f:
         bytes_read = f.read()
 
     assert reconstructed == bytes_read
