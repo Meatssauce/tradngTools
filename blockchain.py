@@ -4,8 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import IO
 
-from opcodes import Opcode
-from tools import hex2
+from tools import hex2, Opcode, ScriptPubKeyType
 
 
 def read_varint(file: IO):
@@ -39,6 +38,57 @@ def varint2Bytes(num: int):
         raise ValueError('num too large for varint')
 
     return bytes.fromhex(f'{prefix}{num:0{length}x}')
+
+
+def decompress_pk(compressed):
+    # Split compressed key in to prefix and x-coordinate
+    prefix = compressed[:2]
+    x = int(compressed[2:], base=16)
+
+    # Secp256k1 curve parameters
+    # p = int('fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f', base=16)
+    p = 115792089237316195423570985008687907853269984665640564039457584007908834671663
+
+    # Work out y values using the curve equation y^2 = x^3 + 7
+    y_sq = (x ** 3 + 7) % p  # everything is modulo p
+
+    # Secp256k1 is chosen in a special way so that the square root of y is y^((p+1)/4)
+    y = pow(y_sq, (p + 1) // 4, p)  # use modular exponentation
+
+    # Use prefix to select the correct value for y
+    # * 02 prefix = y is even
+    # * 03 prefix = y is odd
+    if (prefix == '02' and y % 2 != 0) or (prefix == '03' and y % 2 == 0):
+        y = (p - y) % p
+
+    # Construct the uncompressed public key
+    x = f'{hex2(x):0{64}}'  # convert to hex and make sure it's 32 bytes (64 characters)
+    y = f'{hex2(y):0{64}}'
+    uncompressed = '04' + x + y
+
+    # Result
+    return uncompressed
+
+
+def split_public_keys(keys: str):
+    """Split a string of public keys in hexadecimal
+
+    :param keys: the string of public keys in hexadecimal to split
+    :return: list of split keys
+    """
+
+    if not keys:
+        return []
+
+    if keys.startswith('04'):
+        key_byte_count = 64
+        pk = keys[:2 + key_byte_count * 2]
+    elif keys.startswith('03') or keys.startswith('02'):
+        key_byte_count = 32
+        pk = decompress_pk(keys[:2 + key_byte_count * 2])
+    else:
+        raise ValueError('Illegal keys format')
+    return [pk] + split_public_keys(keys[2 + key_byte_count * 2:])
 
 
 # def read_varint_bytes(stream: bytes) -> tuple[int, int]:
@@ -147,21 +197,25 @@ class Output:
         return cls(value, scriptPubKey_size, scriptPubKey)
 
     @property
+    def scriptPubKey_type(self):
+        for pattern in ScriptPubKeyType:
+            if pattern == ScriptPubKeyType.NONSTANDARD:
+                continue
+            if re.search(f'{pattern}', self.scriptPubKey):
+                return pattern
+        return ScriptPubKeyType.NONSTANDARD
+
+    @property
     def recipients(self):
         """Bitcoin address(es) or public key(s) to which the output instance is sent"""
 
-        # scriptPubKey patterns
-        p2pkh = f'{Opcode.DUP}{Opcode.HASH160}([0-9a-f]{{40}}){Opcode.EQUALVERFIY}{Opcode.CHECKSIG}'
-        p2pk = f'{Opcode.ONE}([0-9a-f]{{130}}){Opcode.THREE}{Opcode.CHECKMULTISIG}'
-        p2ms = f'{Opcode.HASH160}([0-9a-f]{{130}}){{1,3}}{Opcode.EQUAL}'
-        p2sh = f'{Opcode.RETURN}([0-9a-f]{{40}})'
-        # null_data = f'([0-9a-f]*){Opcode.CHECKSIG}'
+        if key_search := re.search(f'{ScriptPubKeyType.P2MS}', self.scriptPubKey):
+            keys = key_search.group(1)
+            keys = split_public_keys(keys)
+            return keys
 
-        if key_search := re.search(p2ms, self.scriptPubKey):
-            return list(key_search.groups())
-
-        for pattern in [p2pkh, p2pk, p2sh]:
-            if not (key_search := re.search(pattern, self.scriptPubKey)):
+        for pattern in [ScriptPubKeyType.P2PK, ScriptPubKeyType.P2PKH, ScriptPubKeyType.P2SM]:
+            if not (key_search := re.search(f'{pattern}', self.scriptPubKey)):
                 continue
             return [key_search.group(1)]
 
@@ -172,7 +226,7 @@ class Output:
         if self.recipients:
             return None
 
-        null_data = f'([0-9a-f]*){Opcode.CHECKSIG}'
+        null_data = f'^{Opcode.RETURN}([0-9a-f]*)$'
 
         try:
             return re.search(null_data, self.scriptPubKey).group(1)
@@ -234,7 +288,7 @@ class Block:
     version: str
     prev_block_hash: str
     merkle_root: str
-    time_: str
+    time_: int
     bits: str
     nonce: str
 
@@ -250,7 +304,7 @@ class Block:
         version = file.read(4)[::-1].hex()
         prev_block_hash = file.read(32)[::-1].hex()
         merkle_root = file.read(32)[::-1].hex()
-        time_ = file.read(4)[::-1].hex()
+        time_ = int(file.read(4)[::-1].hex(), base=16)
         bits = file.read(4)[::-1].hex()
         nonce = file.read(4)[::-1].hex()
 
@@ -262,19 +316,18 @@ class Block:
                    tx_count, transactions)
 
     def to_bytes(self):
-        # magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
-        # size = bytes.fromhex(hex2(self.size))[::-1]
-        # version = bytes.fromhex(self.version)[::-1]
-        # pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
-        # merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        # time_ = bytes.fromhex(self.time_)[::-1]
-        # bits = bytes.fromhex(self.bits)[::-1]
-        # nonce = bytes.fromhex(self.nonce)[::-1]
-        # tx_count = varint2Bytes(self.tx_count)
-        # transactions = b''.join(tx.to_bytes() for tx in self.transactions)
-        data = bytes.fromhex(self.magic_bytes)[::-1] + bytes.fromhex(hex2(self.size))[::-1] + \
-               bytes.fromhex(self.version)[::-1] + bytes.fromhex(self.prev_block_hash)[::-1] + \
-               bytes.fromhex(self.merkle_root)[::-1] + bytes.fromhex(self.time_)[::-1] + \
-               bytes.fromhex(self.bits)[::-1] + bytes.fromhex(self.nonce)[::-1] + \
-               varint2Bytes(self.tx_count) + b''.join(tx.to_bytes() for tx in self.transactions)
+        magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
+        size = bytes.fromhex(hex2(self.size))[::-1]
+        version = bytes.fromhex(self.version)[::-1]
+        pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
+        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
+        time_ = bytes.fromhex(hex2(self.time_))[::-1]
+        bits = bytes.fromhex(self.bits)[::-1]
+        nonce = bytes.fromhex(self.nonce)[::-1]
+        tx_count = varint2Bytes(self.tx_count)
+        transactions = b''.join(tx.to_bytes() for tx in self.transactions)
+
+        data = (magic_bytes + size + version + pre_block_hash + merkle_root + time_ + bits + nonce +
+                tx_count + transactions)
+
         return data

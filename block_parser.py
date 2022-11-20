@@ -11,8 +11,7 @@ from typing import IO
 from tqdm import tqdm
 
 from blockchain import Block, Output
-from opcodes import Opcode
-from tools import ReadableFileInput
+from tools import ReadableFileInput, Opcode
 
 
 def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648c1709e41890f8c44
@@ -127,7 +126,13 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defa
             try:
                 txo_being_spent = past_outputs[input_.tx_id][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
             except IndexError:
-                print(len(past_outputs[input_.tx_id]))
+                print(f'{input_.is_coinbase()=}')
+                print(f'{input_.tx_id=}')
+                print(f'{input_.vout=}')
+                print(f'{len(past_outputs[input_.tx_id])=}')
+                print(f'{len(tx.outputs)=}')
+                print(f'{tx.outputs[0].scriptPubKey_type=}')
+                print(f'{tx.outputs[0].scriptPubKey=}')
                 raise
 
             for sender in txo_being_spent.recipients:
@@ -143,6 +148,9 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defa
                     balances[sender] -= txo_being_spent.value
                 else:
                     balances[sender] = -txo_being_spent.value
+
+        if tx.id == '0437cd7f8525ceed2324359c2d0ba26006d92d856a9c20fa0241106ee5a597c9':
+            pass
 
         for output in tx.outputs:
             for recipient in output.recipients:
@@ -184,10 +192,44 @@ def build_ledger_history(blocks_dir: str, end: int = None):
     return utxo, balances
 
 
+def in_order(blocks_dir: str, end: int = None):
+    """Checks if all blocks are in ascending order"""
+
+    max_time = 0
+    block_height = 0
+
+    filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
+
+    for block in read_dat(filepaths):
+        if end is not None and block_height >= end - 1:
+            return True
+
+        if block.time_ < max_time:
+            return False
+        max_time = block.time_
+        block_height += 1
+
+    return True
+
+
+def build_index(blocks_dir: str):
+    """Build an index of blocks (filename, position)"""
+
+    index = []
+    filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
+
+    for block in read_dat(filepaths):
+        index
+
+    return True
+
+
+
 def main():
-    utxo, balances = build_ledger_history('datasets/blocks', 1000)
-    print(f'{utxo=}')
-    print(f'{balances=}')
+    # utxo, balances = build_ledger_history('datasets/blocks', 1000)
+    # print(f'{utxo=}')
+    # print(f'{balances=}')
+    print(in_order('datasets/blocks'))
 
 
 if __name__ == '__main__':
