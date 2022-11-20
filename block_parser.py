@@ -108,6 +108,23 @@ def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648
 #             'merkle_root': merkle_root, 'time': time_, 'bits': bits, 'nonce': nonce, 'transactions': transactions}
 
 
+def read_dat_from_index(index_filepath: str):
+    with open(index_filepath, 'r') as f:
+        f.readline()
+        i = 1
+        while True:
+            print(f"{i=}")
+            try:
+                _, path, position = f.readline().split(',')
+                position = int(position)
+            except (EOFError, ValueError):
+                break
+            i += 1
+            with open(path, 'rb') as block_file:
+                block_file.seek(position)
+                yield Block.from_file(block_file)
+
+
 def read_dat(filepaths: [str], return_index=False):
     with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
         while True:
@@ -222,7 +239,7 @@ def get_sorted_index(blocks_dir: str, end: int = None):
     return sorted(index, key=lambda x: x[0])
 
 
-def build_index(blocks_dir: str, filename: str = 'index.csv'):
+def build_index(blocks_dir: str, filename: str):
     index = get_sorted_index(blocks_dir)
     pd.DataFrame(index, columns=['time', 'path', 'position']).to_csv(filename, index=False)
 

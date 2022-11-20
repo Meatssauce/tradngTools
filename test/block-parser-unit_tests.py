@@ -37,7 +37,7 @@ def test_varint2Bytes():
 
 
 def test_read_and_inverse_read():
-    block_path = '../datasets/blocks/blk00000.dat'
+    block_path = 'datasets/blocks/blk00000.dat'
 
     block = next(read_dat([block_path]))
     reconstructed = block.to_bytes()
@@ -45,13 +45,28 @@ def test_read_and_inverse_read():
     assert reconstructed == next(read_dat([block_path])).to_bytes()
 
 
-def test_read_and_inverse_read_all():
-    block_path = '../datasets/blocks/blk00000.dat'
+# def test_read_and_inverse_read_all():
+#     block_path = '../datasets/blocks/blk00000.dat'
+#
+#     blocks = list(read_dat([block_path]))
+#     reconstructed = b''.join(block.to_bytes() for block in blocks)
+#
+#     with open(block_path, 'rb') as f:
+#         bytes_read = f.read()
+#
+#     assert reconstructed == bytes_read
 
-    blocks = list(read_dat([block_path]))
-    reconstructed = b''.join(block.to_bytes() for block in blocks)
 
-    with open(block_path, 'rb') as f:
-        bytes_read = f.read()
+def test_index_and_read_from_index():
+    from block_parser import build_index, read_dat_from_index, read_dat
+    import glob
+    import os
 
-    assert reconstructed == bytes_read
+    blocks_dir = 'datasets/blocks'
+    index_path = 'datasets/blocks/index.csv'
+
+    blocks = sorted(list(read_dat(glob.glob(os.path.join(blocks_dir, 'blk*.dat')))), key=lambda x: x.time_)
+    build_index(blocks_dir, index_path)
+    print(f'{len(blocks)=}')
+
+    assert blocks == list(read_dat_from_index(index_path))
