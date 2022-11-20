@@ -118,7 +118,7 @@ class Input:
     coinbase: bool
 
     @classmethod
-    def from_file(cls, file: IO, coinbase: bool):
+    def from_file(cls, file: IO, coinbase: bool = False):
         tx_id = file.read(32)[::-1].hex()
         vout = int(file.read(4)[::-1].hex(), base=16)
         scriptSig_size = read_varint(file)
@@ -146,7 +146,7 @@ class Input:
     #     return cls(tx_id, vout, scriptSig_size, scriptSig, sequence)
 
     def to_bytes(self):
-        data = bytes.fromhex(self.tx_id)[::-1] + bytes.fromhex(hex2(self.vout))[::-1] + \
+        data = bytes.fromhex(self.tx_id)[::-1] + bytes.fromhex(f'{self.vout:0{8}x}')[::-1] + \
                varint2Bytes(self.scriptSig_size) + bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
         return data
 
@@ -192,7 +192,7 @@ class Output:
     coinbase: bool
 
     @classmethod
-    def from_file(cls, file: IO, coinbase: bool):
+    def from_file(cls, file: IO, coinbase: bool = False):
         value = int(file.read(8)[::-1].hex(), base=16)
         scriptPubKey_size = read_varint(file)
         scriptPubKey = file.read(scriptPubKey_size).hex()
@@ -236,7 +236,7 @@ class Output:
             raise ValueError('Failed to match scriptPubKey against any known pattern.') from exc
 
     def to_bytes(self):
-        data = bytes.fromhex(hex2(self.value))[::-1] + varint2Bytes(self.scriptPubKey_size) + \
+        data = bytes.fromhex(f'{self.value:0{16}x}')[::-1] + varint2Bytes(self.scriptPubKey_size) + \
                bytes.fromhex(self.scriptPubKey)
         return data
 
@@ -252,7 +252,7 @@ class Transaction:
     coinbase: int
 
     @classmethod
-    def from_file(cls, file: IO, coinbase: bool):
+    def from_file(cls, file: IO, coinbase: bool = False):
         version = file.read(4)[::-1].hex()
 
         input_count = read_varint(file)
@@ -271,9 +271,9 @@ class Transaction:
 
     def to_bytes(self):
         data = bytes.fromhex(self.version)[::-1] + varint2Bytes(self.input_count) + \
-               b''.join(varint2Bytes(i) + input_.to_bytes() for i, input_ in enumerate(self.inputs)) + \
+               b''.join(input_.to_bytes() for input_ in self.inputs) + \
                varint2Bytes(self.output_count) + \
-               b''.join(varint2Bytes(i) + output.to_bytes() for i, output in enumerate(self.outputs)) + \
+               b''.join(output.to_bytes() for output in self.outputs) + \
                bytes.fromhex(self.locktime)[::-1]
         return data
 
