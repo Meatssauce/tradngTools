@@ -8,6 +8,7 @@ from collections import defaultdict
 from itertools import pairwise
 from typing import IO
 
+import pandas as pd
 from tqdm import tqdm
 
 from blockchain import Block, Output
@@ -107,11 +108,14 @@ def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648
 #             'merkle_root': merkle_root, 'time': time_, 'bits': bits, 'nonce': nonce, 'transactions': transactions}
 
 
-def read_dat(filepaths: [str]):
+def read_dat(filepaths: [str], return_index=False):
     with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
         while True:
             try:
-                yield Block.from_file(f)
+                if return_index:
+                    yield f.openedFilepath(), f.positionInFile(), Block.from_file(f)
+                else:
+                    yield Block.from_file(f)
             except EOFError:
                 break
 
@@ -178,58 +182,57 @@ def build_ledger_history(blocks_dir: str, end: int = None):
     past_outputs = defaultdict(list)
     utxo = defaultdict(set)
     balances = defaultdict(float)
-    block_height = 0
-
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
-    for block in read_dat(filepaths):
+    for block_height, block in enumerate(read_dat(filepaths)):
         if end is not None and block_height >= end - 1:
             return utxo, balances
-
         utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
-        block_height += 1
 
     return utxo, balances
 
 
-def in_order(blocks_dir: str, end: int = None):
+def check_order(blocks_dir: str, end: int = None):
     """Checks if all blocks are in ascending order"""
 
     max_time = 0
-    block_height = 0
-
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
-    for block in read_dat(filepaths):
-        if end is not None and block_height >= end - 1:
+    for i, block in enumerate(read_dat(filepaths)):
+        if end is not None and i >= end - 1:
             return True
-
         if block.time_ < max_time:
             return False
         max_time = block.time_
-        block_height += 1
 
     return True
 
 
-def build_index(blocks_dir: str):
+def get_sorted_index(blocks_dir: str, end: int = None):
     """Build an index of blocks (filename, position)"""
 
     index = []
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
-    for block in read_dat(filepaths):
-        index
+    for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
+        if end is not None and i >= end:
+            break
+        index.append((block.time_, filepath, position))
 
-    return True
+    return sorted(index, key=lambda x: x[0])
 
+
+def build_index(blocks_dir: str, filename: str = 'index.csv'):
+    index = get_sorted_index(blocks_dir)
+    pd.DataFrame(index, columns=['time', 'path', 'position']).to_csv(filename, index=False)
 
 
 def main():
-    # utxo, balances = build_ledger_history('datasets/blocks', 1000)
-    # print(f'{utxo=}')
-    # print(f'{balances=}')
-    print(in_order('datasets/blocks'))
+    utxo, balances = build_ledger_history('datasets/blocks', 1000)
+    print(f'{utxo=}')
+    print(f'{balances=}')
+    # index = get_sorted_index('datasets/blocks', end=600)
+    # print(index[585], index[586])
 
 
 if __name__ == '__main__':

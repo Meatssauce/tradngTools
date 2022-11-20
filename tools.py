@@ -10,31 +10,44 @@ def hex2(n):
 
 
 class ReadableFileInput:
-    def __init__(self, filepaths, mode='r', verbose=False):
-        self.filepaths = iter(tqdm(filepaths)) if verbose else iter(filepaths)
-        self.mode = mode
-        self.opened_file = None
+    def __init__(self, filepaths: [str], mode: str = 'r', verbose: bool = False):
+        self._filepaths = iter(tqdm(filepaths)) if verbose else iter(filepaths)
+        self._mode = mode
+        self._opened_file = None
+        self._position_in_file = 0
+        self._opened_filepath = None
 
     def __enter__(self):
-        self.opened_file = open(next(self.filepaths), self.mode)
+        self._opened_filepath = next(self._filepaths)
+        self._opened_file = open(self._opened_filepath, self._mode)
+        self._position_in_file = 0
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.opened_file.close()
+        self._opened_file.close()
+
+    def openedFilepath(self):
+        return self._opened_filepath
+
+    def positionInFile(self):
+        return self._position_in_file
 
     def read(self, num_bytes):
-        reading = self.opened_file.read(num_bytes)
+        reading = self._opened_file.read(num_bytes)
+        self._position_in_file += len(reading)
 
         if reading and len(reading) == num_bytes:
             return reading
         elif reading:
             num_bytes -= len(reading)
 
-        self.opened_file.close()
+        self._opened_file.close()
         try:
-            self.opened_file = open(next(self.filepaths), self.mode)
+            self._opened_filepath = next(self._filepaths)
         except StopIteration as exc:
             raise EOFError from exc
+        self._opened_file = open(self._opened_filepath, self._mode)
+        self._position_in_file = 0
         return reading + self.read(num_bytes)
 
 
