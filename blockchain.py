@@ -115,15 +115,16 @@ class Input:
     scriptSig_size: int  # number of bytes
     scriptSig: str
     sequence: str  # ignored
+    coinbase: bool
 
     @classmethod
-    def from_file(cls, file: IO):
+    def from_file(cls, file: IO, coinbase: bool):
         tx_id = file.read(32)[::-1].hex()
         vout = int(file.read(4)[::-1].hex(), base=16)
         scriptSig_size = read_varint(file)
         scriptSig = file.read(scriptSig_size).hex()
         sequence = file.read(4)[::-1].hex()
-        return cls(tx_id, vout, scriptSig_size, scriptSig, sequence)
+        return cls(tx_id, vout, scriptSig_size, scriptSig, sequence, coinbase)
 
     # @classmethod
     # def from_bytes(cls, stream: bytes) -> 'Input':
@@ -149,8 +150,8 @@ class Input:
                varint2Bytes(self.scriptSig_size) + bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
         return data
 
-    def is_coinbase(self):
-        return self.tx_id == '0' * 64 and self.vout == 4294967295  # int('f' * 8, base=16)
+    # def is_coinbase(self):
+    #     return self.tx_id == '0' * 64 and self.vout == 4294967295  # int('f' * 8, base=16)
 
 
 # 8def hex2Base58(payload: str):
@@ -188,13 +189,14 @@ class Output:
     value: int  # amount of BTC in satoshis.
     scriptPubKey_size: int  # number of bytes
     scriptPubKey: str
+    coinbase: bool
 
     @classmethod
-    def from_file(cls, file: IO):
+    def from_file(cls, file: IO, coinbase: bool):
         value = int(file.read(8)[::-1].hex(), base=16)
         scriptPubKey_size = read_varint(file)
         scriptPubKey = file.read(scriptPubKey_size).hex()
-        return cls(value, scriptPubKey_size, scriptPubKey)
+        return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
 
     @property
     def scriptPubKey_type(self):
@@ -243,28 +245,29 @@ class Output:
 class Transaction:
     version: str
     input_count: int
-    inputs: [Input]
+    inputs: list[Input]
     output_count: int
-    outputs: [Output]
+    outputs: list[Output]
     locktime: str
+    coinbase: int
 
     @classmethod
-    def from_file(cls, file: IO):
+    def from_file(cls, file: IO, coinbase: bool):
         version = file.read(4)[::-1].hex()
 
         input_count = read_varint(file)
-        inputs = [Input.from_file(file) for _ in range(input_count)]
+        inputs = [Input.from_file(file, coinbase) for _ in range(input_count)]
 
         output_count = read_varint(file)
-        outputs = [Output.from_file(file) for _ in range(output_count)]
+        outputs = [Output.from_file(file, coinbase) for _ in range(output_count)]
 
         locktime = file.read(4)[::-1].hex()
 
-        return cls(version, input_count, inputs, output_count, outputs, locktime)
+        return cls(version, input_count, inputs, output_count, outputs, locktime, coinbase)
 
     @property
     def id(self):
-        return sha256(sha256(self.to_bytes()).digest()).digest()
+        return sha256(sha256(self.to_bytes()).digest()).digest().hex()
 
     def to_bytes(self):
         data = bytes.fromhex(self.version)[::-1] + varint2Bytes(self.input_count) + \
@@ -293,7 +296,7 @@ class Block:
     nonce: str
 
     tx_count: int
-    transactions: [Transaction]
+    transactions: list[Transaction]
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput):
@@ -309,7 +312,7 @@ class Block:
         nonce = file.read(4)[::-1].hex()
 
         tx_count = read_varint(file)
-        transactions = [Transaction.from_file(file) for _ in range(tx_count)]
+        transactions = [Transaction.from_file(file, coinbase=True if i == 0 else False) for i in range(tx_count)]
 
         return cls(magic_bytes, size,
                    version, prev_block_hash, merkle_root, time_, bits, nonce,

@@ -11,7 +11,7 @@ from typing import IO
 import pandas as pd
 from tqdm import tqdm
 
-from blockchain import Block, Output
+from blockchain import Block, Output, Input
 from tools import ReadableFileInput, Opcode
 
 
@@ -111,43 +111,45 @@ def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648
 def read_dat_from_index(index_filepath: str):
     with open(index_filepath, 'r') as f:
         f.readline()
-        i = 1
         while True:
-            print(f"{i=}")
             try:
                 _, path, position = f.readline().split(',')
                 position = int(position)
             except (EOFError, ValueError):
                 break
-            i += 1
             with open(path, 'rb') as block_file:
                 block_file.seek(position)
                 yield Block.from_file(block_file)
 
 
 def read_dat(filepaths: [str], return_index=False):
-    with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
-        while True:
-            try:
-                if return_index:
-                    yield f.openedFilepath(), f.positionInFile(), Block.from_file(f)
-                else:
-                    yield Block.from_file(f)
-            except EOFError:
-                break
+    try:
+        with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
+            while True:
+                try:
+                    if return_index:
+                        yield f.openedFilepath(), f.positionInFile(), Block.from_file(f)
+                    else:
+                        yield Block.from_file(f)
+                except EOFError:
+                    break
+    except StopIteration:
+        return
 
 
-def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defaultdict[any, set],
+def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], utxo: defaultdict[any, set[Output]],
                   balances: defaultdict[str, float]):
     for tx in block.transactions:
         for input_ in tx.inputs:
-            if input_.is_coinbase():
+            if input_.coinbase:
                 continue
 
             try:
                 txo_being_spent = past_outputs[input_.tx_id][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
             except IndexError:
-                print(f'{input_.is_coinbase()=}')
+                print(f'{len(block.transactions)=}')
+                print(f'{tx.coinbase=}')
+                print(f'{input_.coinbase=}')
                 print(f'{input_.tx_id=}')
                 print(f'{input_.vout=}')
                 print(f'{len(past_outputs[input_.tx_id])=}')
@@ -193,15 +195,20 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list], utxo: defa
     return utxo, balances, past_outputs
 
 
-def build_ledger_history(blocks_dir: str, end: int = None):
+def build_ledger_history(location: str, read_from_index: bool = False, end: int = None):
     """Build history of account balances from Bitcoin blocks"""
 
     past_outputs = defaultdict(list)
     utxo = defaultdict(set)
     balances = defaultdict(float)
-    filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
-    for block_height, block in enumerate(read_dat(filepaths)):
+    if read_from_index:
+        block_iter = read_dat_from_index(index_filepath=location)
+    else:
+        filepaths = glob.glob(os.path.join(location, 'blk*.dat'))
+        block_iter = read_dat(filepaths)
+
+    for block_height, block in enumerate(block_iter):
         if end is not None and block_height >= end - 1:
             return utxo, balances
         utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
@@ -245,7 +252,12 @@ def build_index(blocks_dir: str, filename: str):
 
 
 def main():
-    utxo, balances = build_ledger_history('datasets/blocks', 1000)
+    blocks_dir = 'datasets/blocks'
+    index_filepath = 'datasets/blocks/index.csv'
+
+    if not os.path.isfile(index_filepath):
+        build_index(blocks_dir, index_filepath)
+    utxo, balances = build_ledger_history(index_filepath, read_from_index=True, end=1000)
     print(f'{utxo=}')
     print(f'{balances=}')
     # index = get_sorted_index('datasets/blocks', end=600)
