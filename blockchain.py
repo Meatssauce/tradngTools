@@ -255,7 +255,7 @@ class Transaction:
     locktime: str
 
     # Derived properties
-    coinbase: int
+    coinbase: bool
 
     @property
     def value(self):
@@ -300,8 +300,8 @@ class Block:
     prev_block_hash: str
     merkle_root: str
     time_: int
-    bits: str
-    nonce: str
+    bits: int
+    nonce: int
 
     tx_count: int
     transactions: list[Transaction]
@@ -315,12 +315,13 @@ class Block:
         size = int.from_bytes(file.read(4), byteorder='little')
         # block_header = f.read(80).hex()
 
+        # header
         version = file.read(4)[::-1].hex()
         prev_block_hash = file.read(32)[::-1].hex()
         merkle_root = file.read(32)[::-1].hex()
         time_ = int.from_bytes(file.read(4), byteorder='little')
-        bits = file.read(4)[::-1].hex()
-        nonce = file.read(4)[::-1].hex()
+        bits = int.from_bytes(file.read(4), byteorder='little')
+        nonce = int.from_bytes(file.read(4), byteorder='little')
 
         tx_count = read_varint(file)
         transactions = [Transaction.from_file(file, coinbase=i == 0) for i in range(tx_count)]
@@ -331,13 +332,16 @@ class Block:
 
     def to_bytes(self):
         magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
-        size = bytes.fromhex(hex2(self.size))[::-1]
+        size = bytes.fromhex(f'{self.size:0{8}x}')[::-1]
+
+        # header
         version = bytes.fromhex(self.version)[::-1]
         pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
         merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        time_ = bytes.fromhex(hex2(self.time_))[::-1]
-        bits = bytes.fromhex(self.bits)[::-1]
-        nonce = bytes.fromhex(self.nonce)[::-1]
+        time_ = bytes.fromhex(f'{self.time_:0{8}x}')[::-1]
+        bits = bytes.fromhex(f'{self.bits:0{8}x}')[::-1]
+        nonce = bytes.fromhex(f'{self.nonce:0{8}x}')[::-1]
+
         tx_count = varint2Bytes(self.tx_count)
         transactions = b''.join(tx.to_bytes() for tx in self.transactions)
 
