@@ -1,4 +1,5 @@
 import fileinput
+import hashlib
 from hashlib import sha256
 import re
 from dataclasses import dataclass
@@ -108,34 +109,35 @@ def split_public_keys(keys: str):
 #     return int(tx_count, base=16), total_bytes_read
 
 
-# def hex2Base58(payload: str):
-#     """Converts a hex string into a base58 string
-#
-#     :param payload: the hexadecimal string to be converted
-#     :return: corresponding base58 string
-#     """
-#
-#     alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-#     sb = ''
-#     payload = int(payload, base=16)
-#     while payload > 0:
-#         r = payload % 58
-#         sb += alphabet[r]
-#         payload = payload // 58
-#     return sb[::-1]
-#
-#
-# def key2Address(payload: str, version: int):
-#     """Convert public key hash to bitcoin address
-#
-#     :param payload: public key to be converted (hexadecimal)
-#     :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
-#     :return: corresponding bitcoin address (Base58Check)
-#     """
-#
-#     prefix = f'{version:0{2}x}'[::-1]
-#     checksum = sha256(bytes.fromhex(prefix + payload)).digest()[:4].hex()  # checksum only take first 4 bytes
-#     return hex2Base58(prefix + payload + checksum)
+def hex2base58(payload: str):
+    """Converts a hex string into a base58 string
+
+    :param payload: the hexadecimal string to be converted
+    :return: corresponding base58 string
+    """
+
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    sb = ''
+    payload = int(payload, base=16)
+    while payload > 0:
+        r = payload % 58
+        sb += alphabet[r]
+        payload = payload // 58
+    return sb[::-1]
+
+
+def keyhash2address(payload: str, version: int):
+    """Convert public key hash to bitcoin address
+
+    :param payload: public key to be converted (hexadecimal)
+    :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
+    :return: corresponding bitcoin address (Base58Check)
+    """
+
+    prefix = f'{version:0{2}x}'
+    checksum = sha256(sha256(bytes.fromhex(prefix + payload)).digest()).digest()[:4].hex()  # only take first 4 bytes
+    manual_leading_symbol = '1' if version == 0 else ''
+    return manual_leading_symbol + hex2base58(prefix + payload + checksum)
 
 
 @dataclass(frozen=True)
