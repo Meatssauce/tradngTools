@@ -263,7 +263,7 @@ class Transaction:
 
     @property
     def id(self):
-        return sha256(sha256(self.to_bytes()).digest()).digest().hex()
+        return sha256(sha256(self.to_bytes()).digest()).digest()[::-1].hex()
 
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
@@ -290,6 +290,7 @@ class Transaction:
 
 @dataclass(frozen=True)
 class Block:
+    # Intrinsic properties
     magic_bytes: str
     size: int  # number of bytes
 
@@ -305,6 +306,7 @@ class Block:
     tx_count: int
     transactions: list[Transaction]
 
+    # Derived properties
     height: int
 
     @classmethod
