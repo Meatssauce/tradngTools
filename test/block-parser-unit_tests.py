@@ -91,3 +91,16 @@ def test_txid():
     transaction = Transaction.from_file(io.BytesIO(bytes_), False)
 
     assert transaction.id == 'c1b4e695098210a31fe02abffe9005cffc051bbe86ff33e173155bcbdc5821e3'
+
+
+def test_address_convertion():
+    from blockchain import keyhash2address, address2keyhash
+
+    inputs = [('99064703cef4618dea719d4325d3a26a20ba8561', 0), ('b249d91635b16e133f4872ee9d6585ac276e12b6', 5)]
+    outputs = ['1Ex7uWfxnXrSnhVDJsDhaifkDnB8GgcgAG', '3Hwifjme6jmeufi8YPZCfL1efG6NNGBhR2']
+
+    for (pkh, version), address in zip(inputs, outputs):
+        output = keyhash2address(pkh, version)
+        reconstructed = address2keyhash(output)
+
+        assert pkh == reconstructed

@@ -112,7 +112,7 @@ def split_public_keys(keys: str):
 def hex2base58(payload: str):
     """Converts a hex string into a base58 string
 
-    :param payload: the hexadecimal string to be converted
+    :param payload: the hexadecimal string to convert
     :return: corresponding base58 string
     """
 
@@ -126,10 +126,32 @@ def hex2base58(payload: str):
     return sb[::-1]
 
 
+def base58_2hex(payload: str):
+    """Converts a base58 string into a hex string
+
+    :param payload: the base58 string to convert
+    :return: corresponding hexadecimal string
+    """
+
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    symbol_to_quantity = {sym: i for i, sym in enumerate(alphabet)}
+    payload = payload[::-1]
+    num = 0
+
+    for unit, symbol in enumerate(payload):
+        num += 58 ** unit * symbol_to_quantity[symbol]
+
+    return f'{num:0{40 + 2 + 8}x}'
+
+
+def pk2pkh(payload: str):
+    return hashlib.new('ripemd160', sha256(payload).digest()).digest()
+
+
 def keyhash2address(payload: str, version: int):
     """Convert public key hash to bitcoin address
 
-    :param payload: public key to be converted (hexadecimal)
+    :param payload: public key to convert (hexadecimal)
     :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
     :return: corresponding bitcoin address (Base58Check)
     """
@@ -138,6 +160,16 @@ def keyhash2address(payload: str, version: int):
     checksum = sha256(sha256(bytes.fromhex(prefix + payload)).digest()).digest()[:4].hex()  # only take first 4 bytes
     manual_leading_symbol = '1' if version == 0 else ''
     return manual_leading_symbol + hex2base58(prefix + payload + checksum)
+
+
+def address2keyhash(payload: str):
+    """Convert bitcoin address to public key hash (or script hash)
+
+    :param payload: the bitcoin address to convert
+    :return: corresponding public key hash (or script hash)
+    """
+
+    return base58_2hex(payload[1:] if payload[0] == 1 else payload)[2:-8]
 
 
 @dataclass(frozen=True)
