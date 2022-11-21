@@ -153,7 +153,7 @@ class Input:
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
         tx_id = file.read(32)[::-1].hex()
-        vout = int(file.read(4)[::-1].hex(), base=16)
+        vout = int.from_bytes(file.read(4), byteorder='little')
         scriptSig_size = read_varint(file)
         scriptSig = file.read(scriptSig_size).hex()
         sequence = file.read(4)[::-1].hex()
@@ -233,7 +233,7 @@ class Output:
 
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
-        value = int(file.read(8)[::-1].hex(), base=16)
+        value = int.from_bytes(file.read(8), byteorder='little')
         scriptPubKey_size = read_varint(file)
         scriptPubKey = file.read(scriptPubKey_size).hex()
         return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
@@ -312,18 +312,18 @@ class Block:
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
         magic_bytes = file.read(4)[::-1].hex()
-        size = int(file.read(4)[::-1].hex(), base=16)
+        size = int.from_bytes(file.read(4), byteorder='little')
         # block_header = f.read(80).hex()
 
         version = file.read(4)[::-1].hex()
         prev_block_hash = file.read(32)[::-1].hex()
         merkle_root = file.read(32)[::-1].hex()
-        time_ = int(file.read(4)[::-1].hex(), base=16)
+        time_ = int.from_bytes(file.read(4), byteorder='little')
         bits = file.read(4)[::-1].hex()
         nonce = file.read(4)[::-1].hex()
 
         tx_count = read_varint(file)
-        transactions = [Transaction.from_file(file, coinbase=True if i == 0 else False) for i in range(tx_count)]
+        transactions = [Transaction.from_file(file, coinbase=i == 0) for i in range(tx_count)]
 
         return cls(magic_bytes, size,
                    version, prev_block_hash, merkle_root, time_, bits, nonce,
