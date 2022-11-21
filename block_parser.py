@@ -144,8 +144,9 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
             if input_.coinbase:
                 continue
 
+            searchable_txid = bytes.fromhex(input_.tx_id)[::-1].hex()
             try:
-                txo_being_spent = past_outputs[input_.tx_id][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
+                txo_being_spent = past_outputs[searchable_txid][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
             except IndexError:
                 print(f'{len(block.transactions)=}')
                 print(f'{tx.coinbase=}')
@@ -172,8 +173,8 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
                 else:
                     balances[sender] = -txo_being_spent.value
 
-        if tx.id == '0437cd7f8525ceed2324359c2d0ba26006d92d856a9c20fa0241106ee5a597c9':
-            pass
+        # if tx.id == '0437cd7f8525ceed2324359c2d0ba26006d92d856a9c20fa0241106ee5a597c9':
+        #     pass
 
         for output in tx.outputs:
             for recipient in output.recipients:
@@ -258,8 +259,8 @@ def main():
     if not os.path.isfile(index_filepath):
         build_index(blocks_dir, index_filepath)
     utxo, balances = build_ledger_history(index_filepath, read_from_index=True, end=1000)
-    print(f'{utxo=}')
-    print(f'{balances=}')
+    # print(f'{utxo=}')
+    # print(f'{balances=}')
     # index = get_sorted_index('datasets/blocks', end=600)
     # print(index[585], index[586])
 
