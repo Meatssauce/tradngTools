@@ -57,6 +57,17 @@ def test_read_and_inverse_read():
 #     assert reconstructed == bytes_read
 
 
+def test_decompress_pk():
+    from blockchain import decompress_pk
+    inputs = ['0229b3e0919adc41a316aad4f41444d9bf3a9b639550f2aa735676ffff25ba3898',
+              '02f15446771c5c585dd25d8d62df5195b77799aa8eac2f2196c54b73ca05f72f27']
+    outputs = ['0429b3e0919adc41a316aad4f41444d9bf3a9b639550f2aa735676ffff25ba3898d6881e81d2e0163348ff07b3a9a3968401572aa79c79e7edb522f41addc8e6ce',
+               '04f15446771c5c585dd25d8d62df5195b77799aa8eac2f2196c54b73ca05f72f274d335b71c85e064f80191e1f7e2437afa676a3e2a5a5fafcf0d27940cd33e4b4']
+
+    for input_, output in zip(inputs, outputs):
+        assert decompress_pk(input_) == output
+
+
 def test_index_and_read_from_index():
     from block_parser import build_index, read_dat_from_index, read_dat
     import glob
@@ -79,4 +90,4 @@ def test_txid():
     bytes_ = bytes.fromhex('01000000017967a5185e907a25225574544c31f7b059c1a191d65b53dcc1554d339c4f9efc010000006a47304402206a2eb16b7b92051d0fa38c133e67684ed064effada1d7f925c842da401d4f22702201f196b10e6e4b4a9fff948e5c5d71ec5da53e90529c8dbd122bff2b1d21dc8a90121039b7bcd0824b9a9164f7ba098408e63e5b7e3cf90835cceb19868f54f8961a825ffffffff014baf2100000000001976a914db4d1141d0048b1ed15839d0b7a4c488cd368b0e88ac00000000')
     transaction = Transaction.from_file(io.BytesIO(bytes_), False)
 
-    assert transaction.id[::-1] == 'c1b4e695098210a31fe02abffe9005cffc051bbe86ff33e173155bcbdc5821e3'
+    assert transaction.id == 'c1b4e695098210a31fe02abffe9005cffc051bbe86ff33e173155bcbdc5821e3'

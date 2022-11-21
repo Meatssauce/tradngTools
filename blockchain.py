@@ -40,7 +40,7 @@ def varint2Bytes(num: int):
     return bytes.fromhex(f'{prefix}{num:0{length}x}')
 
 
-def decompress_pk(compressed):
+def decompress_pk(compressed: str):
     # Split compressed key in to prefix and x-coordinate
     prefix = compressed[:2]
     x = int(compressed[2:], base=16)
@@ -59,11 +59,11 @@ def decompress_pk(compressed):
     # * 02 prefix = y is even
     # * 03 prefix = y is odd
     if (prefix == '02' and y % 2 != 0) or (prefix == '03' and y % 2 == 0):
-        y = (p - y) % p
+        y = p - y
 
     # Construct the uncompressed public key
-    x = f'{hex2(x):0{64}}'  # convert to hex and make sure it's 32 bytes (64 characters)
-    y = f'{hex2(y):0{64}}'
+    x = f'{x:0{64}x}'  # convert to hex and make sure it's 32 bytes (64 characters)
+    y = f'{y:0{64}x}'
     uncompressed = '04' + x + y
 
     # Result
@@ -108,13 +108,46 @@ def split_public_keys(keys: str):
 #     return int(tx_count, base=16), total_bytes_read
 
 
+# def hex2Base58(payload: str):
+#     """Converts a hex string into a base58 string
+#
+#     :param payload: the hexadecimal string to be converted
+#     :return: corresponding base58 string
+#     """
+#
+#     alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+#     sb = ''
+#     payload = int(payload, base=16)
+#     while payload > 0:
+#         r = payload % 58
+#         sb += alphabet[r]
+#         payload = payload // 58
+#     return sb[::-1]
+#
+#
+# def key2Address(payload: str, version: int):
+#     """Convert public key hash to bitcoin address
+#
+#     :param payload: public key to be converted (hexadecimal)
+#     :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
+#     :return: corresponding bitcoin address (Base58Check)
+#     """
+#
+#     prefix = f'{version:0{2}x}'[::-1]
+#     checksum = sha256(bytes.fromhex(prefix + payload)).digest()[:4].hex()  # checksum only take first 4 bytes
+#     return hex2Base58(prefix + payload + checksum)
+
+
 @dataclass(frozen=True)
 class Input:
+    # Intrinsic properties
     tx_id: str  # that of a tx whose output we take as input
     vout: int  # index of input as an output in the tx
     scriptSig_size: int  # number of bytes
     scriptSig: str
     sequence: str  # ignored
+
+    # Derived properties
     coinbase: bool
 
     @classmethod
@@ -146,57 +179,20 @@ class Input:
     #     return cls(tx_id, vout, scriptSig_size, scriptSig, sequence)
 
     def to_bytes(self):
-        data = bytes.fromhex(self.tx_id)[::-1] + bytes.fromhex(f'{self.vout:0{8}x}')[::-1] + \
+        data = bytes.fromhex(self.tx_id)[::-1] + self.vout.to_bytes(4, byteorder='little') + \
                varint2Bytes(self.scriptSig_size) + bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
         return data
-
-    # def is_coinbase(self):
-    #     return self.tx_id == '0' * 64 and self.vout == 4294967295  # int('f' * 8, base=16)
-
-
-# 8def hex2Base58(payload: str):
-#     """Converts a hex string into a base58 string
-#
-#     :param payload: the hexadecimal string to be converted
-#     :return: corresponding base58 string
-#     """
-#
-#     alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-#     sb = ''
-#     payload = int(payload, base=16)
-#     while payload > 0:
-#         r = payload % 58
-#         sb += alphabet[r]
-#         payload = payload // 58
-#     return sb[::-1]
-#
-#
-# def key2Address(payload: str, version: int):
-#     """Convert public key hash to bitcoin address
-#
-#     :param payload: public key to be converted (hexadecimal)
-#     :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
-#     :return: corresponding bitcoin address (Base58Check)
-#     """
-#
-#     prefix = f'{version:0{2}x}'[::-1]
-#     checksum = sha256(bytes.fromhex(prefix + payload)).digest()[:4].hex()  # checksum only take first 4 bytes
-#     return hex2Base58(prefix + payload + checksum)
 
 
 @dataclass(frozen=True)
 class Output:
+    # Intrinsic properties
     value: int  # amount of BTC in satoshis.
     scriptPubKey_size: int  # number of bytes
     scriptPubKey: str
-    coinbase: bool
 
-    @classmethod
-    def from_file(cls, file: IO, coinbase: bool = False):
-        value = int(file.read(8)[::-1].hex(), base=16)
-        scriptPubKey_size = read_varint(file)
-        scriptPubKey = file.read(scriptPubKey_size).hex()
-        return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
+    # Derived properties
+    coinbase: bool
 
     @property
     def scriptPubKey_type(self):
@@ -235,21 +231,39 @@ class Output:
         except AttributeError as exc:
             raise ValueError('Failed to match scriptPubKey against any known pattern.') from exc
 
+    @classmethod
+    def from_file(cls, file: IO, coinbase: bool = False):
+        value = int(file.read(8)[::-1].hex(), base=16)
+        scriptPubKey_size = read_varint(file)
+        scriptPubKey = file.read(scriptPubKey_size).hex()
+        return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
+
     def to_bytes(self):
-        data = bytes.fromhex(f'{self.value:0{16}x}')[::-1] + varint2Bytes(self.scriptPubKey_size) + \
+        data = self.value.to_bytes(8, byteorder='little') + varint2Bytes(self.scriptPubKey_size) + \
                bytes.fromhex(self.scriptPubKey)
         return data
 
 
 @dataclass(frozen=True)
 class Transaction:
+    # Intrinsic properties
     version: str
     input_count: int
     inputs: list[Input]
     output_count: int
     outputs: list[Output]
     locktime: str
+
+    # Derived properties
     coinbase: int
+
+    @property
+    def value(self):
+        return sum(output.value for output in self.outputs)
+
+    @property
+    def id(self):
+        return sha256(sha256(self.to_bytes()).digest()).digest().hex()
 
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
@@ -265,10 +279,6 @@ class Transaction:
 
         return cls(version, input_count, inputs, output_count, outputs, locktime, coinbase)
 
-    @property
-    def id(self):
-        return sha256(sha256(self.to_bytes()).digest()).digest().hex()
-
     def to_bytes(self):
         data = bytes.fromhex(self.version)[::-1] + varint2Bytes(self.input_count) + \
                b''.join(input_.to_bytes() for input_ in self.inputs) + \
@@ -276,9 +286,6 @@ class Transaction:
                b''.join(output.to_bytes() for output in self.outputs) + \
                bytes.fromhex(self.locktime)[::-1]
         return data
-
-    # def is_coinbase(self):
-    #     return len(self.inputs) == 1 and self.inputs[0].tx_id == '0' * 64 and self.inputs[0].vout == int('f' * 8, base=16)
 
 
 @dataclass(frozen=True)

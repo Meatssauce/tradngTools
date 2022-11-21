@@ -150,19 +150,7 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
                 continue
 
             searchable_txid = bytes.fromhex(input_.tx_id)[::-1].hex()
-            try:
-                txo_being_spent = past_outputs[searchable_txid][input_.vout - 1]  # todo check if vout is 1 or 0 indexed
-            except IndexError:
-                print(f'{len(block.transactions)=}')
-                print(f'{tx.coinbase=}')
-                print(f'{input_.coinbase=}')
-                print(f'{input_.tx_id=}')
-                print(f'{input_.vout=}')
-                print(f'{len(past_outputs[input_.tx_id])=}')
-                print(f'{len(tx.outputs)=}')
-                print(f'{tx.outputs[0].scriptPubKey_type=}')
-                print(f'{tx.outputs[0].scriptPubKey=}')
-                raise
+            txo_being_spent = past_outputs[searchable_txid][input_.vout]
 
             for sender in txo_being_spent.recipients:
                 if not sender:
