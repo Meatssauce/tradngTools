@@ -69,8 +69,7 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
             if input_.coinbase:
                 continue
 
-            searchable_txid = input_.tx_id
-            txo_being_spent = past_outputs[searchable_txid][input_.vout]
+            txo_being_spent = past_outputs[input_.tx_id][input_.vout]
 
             for sender in txo_being_spent.recipients:
                 if not sender:
@@ -85,9 +84,6 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
                     balances[sender] -= txo_being_spent.value
                 else:
                     balances[sender] = -txo_being_spent.value
-
-        # if tx.id == '0437cd7f8525ceed2324359c2d0ba26006d92d856a9c20fa0241106ee5a597c9':
-        #     pass
 
         for output in tx.outputs:
             for recipient in output.recipients:

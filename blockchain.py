@@ -338,9 +338,9 @@ class Block:
         version = bytes.fromhex(self.version)[::-1]
         pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
         merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        time_ = bytes.fromhex(f'{self.time_:0{8}x}')[::-1]
-        bits = bytes.fromhex(f'{self.bits:0{8}x}')[::-1]
-        nonce = bytes.fromhex(f'{self.nonce:0{8}x}')[::-1]
+        time_ = self.time_.to_bytes(4, byteorder='little')
+        bits = self.bits.to_bytes(4, byteorder='little')
+        nonce = self.nonce.to_bytes(4, byteorder='little')
 
         tx_count = varint2Bytes(self.tx_count)
         transactions = b''.join(tx.to_bytes() for tx in self.transactions)
