@@ -12,7 +12,7 @@ def main():
 
         if not os.path.isfile(index_filepath):
             build_index(blocks_dir, index_filepath)
-        utxo, balances = build_ledger_history(index_filepath, read_from_index=True, end=1000)
+        utxo, balances = build_ledger_history(index_filepath, read_from_index=True)
         print(f'{utxo=}')
         print(f'{balances=}')
 

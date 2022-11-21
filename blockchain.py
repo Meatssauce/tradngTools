@@ -298,8 +298,10 @@ class Block:
     tx_count: int
     transactions: list[Transaction]
 
+    height: int
+
     @classmethod
-    def from_file(cls, file: IO | fileinput.FileInput):
+    def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
         magic_bytes = file.read(4)[::-1].hex()
         size = int(file.read(4)[::-1].hex(), base=16)
         # block_header = f.read(80).hex()
@@ -316,7 +318,7 @@ class Block:
 
         return cls(magic_bytes, size,
                    version, prev_block_hash, merkle_root, time_, bits, nonce,
-                   tx_count, transactions)
+                   tx_count, transactions, height)
 
     def to_bytes(self):
         magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]

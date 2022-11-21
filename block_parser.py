@@ -110,6 +110,7 @@ def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648
 
 def read_dat_from_index(index_filepath: str):
     with open(index_filepath, 'r') as f:
+        i = 0
         f.readline()
         while True:
             try:
@@ -117,22 +118,26 @@ def read_dat_from_index(index_filepath: str):
                 position = int(position)
             except (EOFError, ValueError):
                 break
+
             with open(path, 'rb') as block_file:
                 block_file.seek(position)
-                yield Block.from_file(block_file)
+                yield Block.from_file(block_file, height=i)
+            i += 1
 
 
 def read_dat(filepaths: [str], return_index=False):
     try:
         with ReadableFileInput(filepaths, 'rb', verbose=True) as f:
+            i = 0
             while True:
                 try:
                     if return_index:
-                        yield f.openedFilepath(), f.positionInFile(), Block.from_file(f)
+                        yield f.openedFilepath(), f.positionInFile(), Block.from_file(f, height=i)
                     else:
-                        yield Block.from_file(f)
+                        yield Block.from_file(f, height=i)
                 except EOFError:
                     break
+                i += 1
     except StopIteration:
         return
 
@@ -258,9 +263,9 @@ def main():
 
     if not os.path.isfile(index_filepath):
         build_index(blocks_dir, index_filepath)
-    utxo, balances = build_ledger_history(index_filepath, read_from_index=True, end=1000)
-    # print(f'{utxo=}')
-    # print(f'{balances=}')
+    utxo, balances = build_ledger_history(index_filepath, read_from_index=True)
+    print(f'{utxo=}')
+    print(f'{balances=}')
     # index = get_sorted_index('datasets/blocks', end=600)
     # print(index[585], index[586])
 
