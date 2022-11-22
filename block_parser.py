@@ -62,21 +62,20 @@ def read_dat(filepaths: [str], return_index=False):
         return
 
 
-def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], utxo: defaultdict[any, set[Output]],
-                  balances: defaultdict[str, float]):
+def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], balances: defaultdict[str, float]):
     for tx in block.transactions:
         for i, input_ in enumerate(tx.inputs):
             if input_.coinbase:
                 continue
 
-            txo_being_spent = past_outputs[input_.tx_id][input_.vout]
+            txo_being_spent = input_.original_output
 
             for sender in txo_being_spent.recipients:
                 if not sender:
                     continue
 
                 if sender in utxo:
-                    utxo[sender].remove(txo_being_spent)
+                    utxo[sender].remove((input_.tx_id, input_.vout))
                 else:
                     utxo[sender] = set()
 
@@ -85,30 +84,27 @@ def update_ledger(block: Block, past_outputs: defaultdict[str, list[Output]], ut
                 else:
                     balances[sender] = -txo_being_spent.value
 
-        for output in tx.outputs:
+        for vout, output in enumerate(tx.outputs):
             for recipient in output.recipients:
                 if not recipient:
                     continue
 
                 if recipient in utxo:
-                    utxo[recipient].add(output)
+                    utxo[recipient].add((tx.id, vout))
                 else:
-                    utxo[recipient] = {output}
+                    utxo[recipient] = {(tx.id, vout)}
 
                 if recipient in balances:
                     balances[recipient] += output.value
                 else:
                     balances[recipient] = output.value
 
-            past_outputs[tx.id].append(output)
-
-    return utxo, balances, past_outputs
+    return utxo, balances
 
 
 def build_ledger_history(location: str, read_from_index: bool = False, end: int = None):
     """Build history of account balances from Bitcoin blocks"""
 
-    past_outputs = defaultdict(list)
     utxo = defaultdict(set)
     balances = defaultdict(float)
 
@@ -121,7 +117,7 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
     for block_height, block in enumerate(block_iter):
         if end is not None and block_height >= end - 1:
             return utxo, balances
-        utxo, balances, past_outputs = update_ledger(block, past_outputs, utxo, balances)
+        utxo, balances = update_ledger(block, utxo, balances)
 
     return utxo, balances
 

@@ -5,7 +5,9 @@ import re
 from dataclasses import dataclass
 from typing import IO
 
-from tools import hex2, Opcode, ScriptPubKeyType
+import bitcoin
+
+from tools import hex2, Opcode, PKScriptType
 
 
 def read_varint(file: IO):
@@ -145,7 +147,7 @@ def base58_2hex(payload: str):
 
 
 def pk2pkh(payload: str):
-    return hashlib.new('ripemd160', sha256(payload).digest()).digest()
+    return hashlib.new('ripemd160', sha256(bytes.fromhex(payload)).digest()).digest().hex()
 
 
 def keyhash2address(payload: str, version: int):
@@ -184,6 +186,10 @@ class Input:
     # Derived properties
     coinbase: bool
 
+    @property
+    def original_output(self):
+        return PastTransactions()[self.tx_id].outputs[self.vout]
+
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
         tx_id = file.read(32)[::-1].hex()
@@ -192,25 +198,6 @@ class Input:
         scriptSig = file.read(scriptSig_size).hex()
         sequence = file.read(4)[::-1].hex()
         return cls(tx_id, vout, scriptSig_size, scriptSig, sequence, coinbase)
-
-    # @classmethod
-    # def from_bytes(cls, stream: bytes) -> 'Input':
-    #     tx_id = stream[:32][::-1].hex()
-    #     stream = stream[32:]
-    #
-    #     vout = stream[:4][::-1].hex()
-    #     stream = stream[4:]
-    #
-    #     scriptSig_size, bytes_read = read_varint_bytes(stream)
-    #     stream = stream[bytes_read:]
-    #
-    #     scriptSig = stream[:scriptSig_size].hex()
-    #     stream = stream[scriptSig_size:]
-    #
-    #     sequence = stream[:4][::-1].hex()
-    #     stream = stream[4:]
-    #
-    #     return cls(tx_id, vout, scriptSig_size, scriptSig, sequence)
 
     def to_bytes(self):
         data = bytes.fromhex(self.tx_id)[::-1] + self.vout.to_bytes(4, byteorder='little') + \
@@ -230,26 +217,42 @@ class Output:
 
     @property
     def scriptPubKey_type(self):
-        for pattern in ScriptPubKeyType:
-            if pattern == ScriptPubKeyType.NONSTANDARD:
+        for pattern in PKScriptType:
+            if pattern == PKScriptType.NONSTANDARD:
                 continue
             if re.search(f'{pattern}', self.scriptPubKey):
                 return pattern
-        return ScriptPubKeyType.NONSTANDARD
+        return PKScriptType.NONSTANDARD
 
     @property
     def recipients(self):
         """Bitcoin address(es) or public key(s) to which the output instance is sent"""
 
-        if key_search := re.search(f'{ScriptPubKeyType.P2MS}', self.scriptPubKey):
-            keys = key_search.group(1)
-            keys = split_public_keys(keys)
-            return keys
+        if self.scriptPubKey_type == PKScriptType.P2PKH:
+            key = re.search(f'{PKScriptType.P2PKH}', self.scriptPubKey).group(1)
+            if len(key) == 42:
+                key = key[2:]
+            return [keyhash2address(key, version=0)]
 
-        for pattern in [ScriptPubKeyType.P2PK, ScriptPubKeyType.P2PKH, ScriptPubKeyType.P2SM]:
-            if not (key_search := re.search(f'{pattern}', self.scriptPubKey)):
-                continue
-            return [key_search.group(1)]
+        if self.scriptPubKey_type == PKScriptType.P2SH:
+            key = re.search(f'{PKScriptType.P2SH}', self.scriptPubKey).group(1)
+            if len(key) == 42:
+                key = key[2:]
+            return [keyhash2address(key, version=5)]
+
+        if self.scriptPubKey_type == PKScriptType.P2MS:
+            keys = re.search(f'{PKScriptType.P2MS}', self.scriptPubKey).group(1)
+            keys = split_public_keys(keys)
+            return [bitcoin.pubkey_to_address(key) for key in keys]
+
+        if self.scriptPubKey_type == PKScriptType.P2PK:
+            key = re.search(f'{PKScriptType.P2PK}', self.scriptPubKey).group(1)
+            if len(key) == 132:
+                key = key[2:]
+            elif len(key) != 130:
+                raise ValueError('Unexpected key length')
+            # todo: get rid of above
+            return [bitcoin.pubkey_to_address(key)]
 
         return []
 
@@ -311,7 +314,10 @@ class Transaction:
 
         locktime = file.read(4)[::-1].hex()
 
-        return cls(version, input_count, inputs, output_count, outputs, locktime, coinbase)
+        self = cls(version, input_count, inputs, output_count, outputs, locktime, coinbase)
+        PastTransactions()[self.id] = self
+
+        return self
 
     def to_bytes(self):
         data = bytes.fromhex(self.version)[::-1] + varint2Bytes(self.input_count) + \
@@ -343,6 +349,10 @@ class Block:
     # Derived properties
     height: int
 
+    @property
+    def id(self):
+        return sha256(sha256(self.to_bytes()).digest()).digest()[::-1].hex()
+
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
         magic_bytes = file.read(4)[::-1].hex()
@@ -360,9 +370,16 @@ class Block:
         tx_count = read_varint(file)
         transactions = [Transaction.from_file(file, coinbase=i == 0) for i in range(tx_count)]
 
-        return cls(magic_bytes, size,
-                   version, prev_block_hash, merkle_root, time_, bits, nonce,
-                   tx_count, transactions, height)
+        # for tx in transactions:
+        #     if any(output.scriptPubKey_type != ScriptPubKeyType.P2PK for output in tx.outputs):
+        #         break
+
+        self = cls(magic_bytes, size,
+                     version, prev_block_hash, merkle_root, time_, bits, nonce,
+                     tx_count, transactions, height)
+        PastBlocks()[self.id] = self
+
+        return self
 
     def to_bytes(self):
         magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
@@ -383,3 +400,20 @@ class Block:
                 tx_count + transactions)
 
         return data
+
+
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class PastBlocks(dict, metaclass=Singleton):
+    pass
+
+
+class PastTransactions(dict, metaclass=Singleton):
+    pass

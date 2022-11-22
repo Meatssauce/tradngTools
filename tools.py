@@ -75,12 +75,12 @@ class Opcode(str, Enum):
     CHECKMULTISIG = 'ae'
 
 
-class ScriptPubKeyType(str, Enum):
+class PKScriptType(str, Enum):
     """Standard ScriptPubKey Patterns"""
 
-    P2PK = f'^([0-9a-f]*){Opcode.CHECKSIG}$'
     P2PKH = f'^{Opcode.DUP}{Opcode.HASH160}([0-9a-f]*){Opcode.EQUALVERFIY}{Opcode.CHECKSIG}$'
-    P2MS = f'^5[1-3]([0-9a-f]+)5[1-3]{Opcode.CHECKMULTISIG}$'
-    P2SM = f'^{Opcode.HASH160}([0-9a-f]*){Opcode.EQUAL}$'
+    P2SH = f'^{Opcode.HASH160}([0-9a-f]*){Opcode.EQUAL}$'
     NULL_DATA = f'^{Opcode.RETURN}([0-9a-f]*)$'
+    P2MS = f'^5[1-3]([0-9a-f]+)5[1-3]{Opcode.CHECKMULTISIG}$'
+    P2PK = f'^([0-9a-f]*){Opcode.CHECKSIG}$'
     NONSTANDARD = f'.*'
