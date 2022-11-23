@@ -52,9 +52,9 @@ def read_dat(filepaths: [str], return_index=False):
             while True:
                 try:
                     if return_index:
-                        yield f.openedFilepath(), f.positionInFile(), Block.from_file(f, height=i)
+                        yield f.openedFilepath(), f.positionInFile(), Block.from_file(f, height=-1)
                     else:
-                        yield Block.from_file(f, height=i)
+                        yield Block.from_file(f, height=-1)
                 except EOFError:
                     break
                 i += 1
@@ -115,11 +115,11 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
         block_iter = read_dat(filepaths)
 
     for block_height, block in enumerate(block_iter):
-        if block.height == 30000:
+        if block.height == 51730:
                 pass
         if end is not None and block_height >= end - 1:
             return utxo, balances
-        # utxo, balances = update_ledger(block, utxo, balances)
+        utxo, balances = update_ledger(block, utxo, balances)
 
     return utxo, balances
 
