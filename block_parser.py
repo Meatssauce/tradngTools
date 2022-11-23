@@ -74,10 +74,10 @@ def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], ba
                 if not sender:
                     continue
 
-                if sender in utxo:
-                    utxo[sender].remove((input_.tx_id, input_.vout))
-                else:
-                    utxo[sender] = set()
+                # if sender in utxo:
+                #     utxo[sender].remove((input_.tx_id, input_.vout))
+                # else:
+                #     utxo[sender] = set()
 
                 if sender in balances:
                     balances[sender] -= txo_being_spent.value
@@ -89,10 +89,10 @@ def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], ba
                 if not recipient:
                     continue
 
-                if recipient in utxo:
-                    utxo[recipient].add((tx.id, vout))
-                else:
-                    utxo[recipient] = {(tx.id, vout)}
+                # if recipient in utxo:
+                #     utxo[recipient].add((tx.id, vout))
+                # else:
+                #     utxo[recipient] = {(tx.id, vout)}
 
                 if recipient in balances:
                     balances[recipient] += output.value
@@ -115,6 +115,10 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
         block_iter = read_dat(filepaths)
 
     for block_height, block in enumerate(block_iter):
+        if len(block.transactions) > 1 and len(block.transactions[1].inputs) > 1:
+            pass
+        if block.height == 29664:
+                pass
         if end is not None and block_height >= end - 1:
             return utxo, balances
         utxo, balances = update_ledger(block, utxo, balances)

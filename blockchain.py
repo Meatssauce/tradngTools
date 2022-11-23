@@ -285,6 +285,7 @@ class Output:
 class Transaction:
     # Intrinsic properties
     version: str
+    # witness: bool
     input_count: int
     inputs: list[Input]
     output_count: int
@@ -305,6 +306,8 @@ class Transaction:
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
         version = file.read(4)[::-1].hex()
+
+        # witness = file.read(2).hex()
 
         input_count = read_varint(file)
         inputs = [Input.from_file(file, coinbase) for _ in range(input_count)]
@@ -351,7 +354,7 @@ class Block:
 
     @property
     def id(self):
-        return sha256(sha256(self.to_bytes()).digest()).digest()[::-1].hex()
+        return hashlib.new('sha256', hashlib.new('sha256', self.to_bytes()).digest()).digest()[::-1].hex()
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
@@ -375,8 +378,8 @@ class Block:
         #         break
 
         self = cls(magic_bytes, size,
-                     version, prev_block_hash, merkle_root, time_, bits, nonce,
-                     tx_count, transactions, height)
+                   version, prev_block_hash, merkle_root, time_, bits, nonce,
+                   tx_count, transactions, height)
         PastBlocks()[self.id] = self
 
         return self

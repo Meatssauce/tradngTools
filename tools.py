@@ -51,6 +51,21 @@ class ReadableFileInput:
         return reading + self.read(num_bytes)
 
 
+class FileWithReadHist:
+    def __init__(self, file):
+        self._file = file
+        self._raw_bytes = b''
+
+    @property
+    def raw_bytes(self):
+        return self._raw_bytes
+
+    def read(self, n_bytes):
+        data = self._file.read(n_bytes)
+        self._raw_bytes += data
+        return data
+
+
 class Opcode(str, Enum):
     FALSE = '00'
     TRUE = '51'
