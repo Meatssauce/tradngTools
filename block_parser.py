@@ -115,13 +115,11 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
         block_iter = read_dat(filepaths)
 
     for block_height, block in enumerate(block_iter):
-        if len(block.transactions) > 1 and len(block.transactions[1].inputs) > 1:
-            pass
-        if block.height == 29664:
+        if block.height == 30000:
                 pass
         if end is not None and block_height >= end - 1:
             return utxo, balances
-        utxo, balances = update_ledger(block, utxo, balances)
+        # utxo, balances = update_ledger(block, utxo, balances)
 
     return utxo, balances
 

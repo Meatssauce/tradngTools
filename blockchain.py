@@ -359,7 +359,16 @@ class Block:
 
     @property
     def id(self):
-        return hashlib.new('sha256', hashlib.new('sha256', self.to_bytes()).digest()).digest()[::-1].hex()
+        version = bytes.fromhex(self.version)[::-1]
+        pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
+        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
+        time_ = self.time_.to_bytes(4, byteorder='little')
+        bits = self.bits.to_bytes(4, byteorder='little')
+        nonce = self.nonce.to_bytes(4, byteorder='little')
+
+        header = version + pre_block_hash + merkle_root + time_ + bits + nonce
+
+        return sha256(sha256(header).digest()).digest()[::-1].hex()
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
