@@ -1,11 +1,13 @@
+import datetime
 import fileinput
 import glob
 import hashlib
 import os
 import re
+import sys
 import warnings
 from collections import defaultdict
-from itertools import pairwise
+from itertools import pairwise, count
 from typing import IO
 
 import pandas as pd
@@ -41,7 +43,10 @@ def read_dat_from_index(index_filepath: str):
 
             with open(path, 'rb') as block_file:
                 block_file.seek(position)
-                yield Block.from_file(block_file, height=i)
+                try:
+                    yield Block.from_file(block_file, height=i)
+                except ValueError as exc:
+                    raise EOFError from exc
             i += 1
 
 
@@ -62,13 +67,19 @@ def read_dat(filepaths: [str], return_index=False):
         return
 
 
-def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], balances: defaultdict[str, float]):
+def update_ledger(block: Block,
+                  # utxo: defaultdict[any, set[tuple[str, int]]],
+                  balances: defaultdict[str, float]):
     for tx in block.transactions:
         for i, input_ in enumerate(tx.inputs):
             if input_.coinbase:
                 continue
 
-            txo_being_spent = input_.original_output
+            try:
+                txo_being_spent = input_.original_output
+            except KeyError:
+                # basically, give up and just skip deducting inputs if block is out of order
+                continue
 
             for sender in txo_being_spent.recipients:
                 if not sender:
@@ -85,7 +96,12 @@ def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], ba
                     balances[sender] = -txo_being_spent.value
 
         for vout, output in enumerate(tx.outputs):
-            for recipient in output.recipients:
+            try:
+                recipients = output.recipients
+            except ValueError:
+                continue
+
+            for recipient in recipients:
                 if not recipient:
                     continue
 
@@ -99,14 +115,18 @@ def update_ledger(block: Block, utxo: defaultdict[any, set[tuple[str, int]]], ba
                 else:
                     balances[recipient] = output.value
 
-    return utxo, balances
+    return balances
 
 
-def build_ledger_history(location: str, read_from_index: bool = False, end: int = None):
+def build_ledger_history(location: str, result_dir: str, read_from_index: bool = False, end: int = None):
     """Build history of account balances from Bitcoin blocks"""
 
-    utxo = defaultdict(set)
+    os.makedirs(result_dir, exist_ok=True)
+
+    prev_frame_time = None
+    frames = []
     balances = defaultdict(float)
+    i = 0
 
     if read_from_index:
         block_iter = read_dat_from_index(index_filepath=location)
@@ -114,14 +134,35 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
         filepaths = glob.glob(os.path.join(location, 'blk*.dat'))
         block_iter = read_dat(filepaths)
 
-    for block_height, block in enumerate(block_iter):
-        if block.height == 51731:
-                pass
-        if end is not None and block_height >= end - 1:
-            return utxo, balances
-        utxo, balances = update_ledger(block, utxo, balances)
+    for block_height in count(0, 1):
+        try:
+            block = next(block_iter)
+        except EOFError:
+            break
 
-    return utxo, balances
+        if end is not None and block_height >= end - 1:
+            break
+
+        balances = update_ledger(block, balances)
+
+        if not prev_frame_time:
+            prev_frame_time = block.time_
+        curr_time = block.time_
+
+        # record a snapshot of balances
+        if datetime.timedelta(seconds=curr_time - prev_frame_time) >= datetime.timedelta(weeks=1):
+            prev_frame_time = curr_time
+            time_label = pd.to_datetime(curr_time, unit='s')
+            df = pd.DataFrame(balances.values(), index=list(balances.keys()), columns=[time_label])
+            frames.append(df)
+
+        # save to disk
+        if sys.getsizeof(frames) > 256 * 1024:
+            pd.concat(frames).to_csv(os.path.join(result_dir, f'ledger{i:03}.csv'))
+            frames = []
+            i += 1
+
+    pd.concat(frames).to_csv(os.path.join(result_dir, f'ledger{i:03}.csv'))
 
 
 def check_order(blocks_dir: str, end: int = None):
@@ -140,40 +181,40 @@ def check_order(blocks_dir: str, end: int = None):
     return True
 
 
-# def get_sorted_index(blocks_dir: str, end: int = None):
-#     """Build an index of blocks (filename, position)"""
-#
-#     index = []
-#     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
-#
-#     for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
-#         if end is not None and i >= end:
-#             break
-#         index.append((block.time_, filepath, position))
-#
-#     return sorted(index, key=lambda x: x[0])
-
-
 def get_sorted_index(blocks_dir: str, end: int = None):
     """Build an index of blocks (filename, position)"""
 
-    block_info_dict = {}
+    index = []
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
     for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
         if end is not None and i >= end:
             break
-        block_info_dict[block.prev_block_hash] = (block, filepath, position)
+        index.append((block.time_, filepath, position))
 
-    curr = min([i for i in block_info_dict.values()], key=lambda x: x[0].time_)
-    chain = [curr]
+    return sorted(index, key=lambda x: x[0])
 
-    while len(chain) < len(block_info_dict):
-        next_ = block_info_dict[curr[0].id]
-        chain.append(next_)
-        curr = next_
 
-    return chain
+# def get_sorted_index(blocks_dir: str, end: int = None):
+#     """Build an index of blocks (filename, position)"""
+#
+#     block_info_dict = {}
+#     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
+#
+#     for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
+#         if end is not None and i >= end:
+#             break
+#         block_info_dict[block.prev_block_hash] = (block, filepath, position)
+#
+#     curr = min([i for i in block_info_dict.values()], key=lambda x: x[0].time_)
+#     chain = [curr]
+#
+#     while len(chain) < len(block_info_dict):
+#         next_ = block_info_dict[curr[0].id]
+#         chain.append(next_)
+#         curr = next_
+#
+#     return chain
 
 
 def build_index(blocks_dir: str, filename: str):
@@ -184,12 +225,12 @@ def build_index(blocks_dir: str, filename: str):
 def main():
     blocks_dir = 'datasets/blocks'
     index_filepath = 'datasets/blocks/index.csv'
+    results_dir = 'results'
 
     if not os.path.isfile(index_filepath):
         build_index(blocks_dir, index_filepath)
-    utxo, balances = build_ledger_history(index_filepath, read_from_index=True)
-    print(f'{utxo=}')
-    print(f'{balances=}')
+    build_ledger_history(index_filepath, result_dir=results_dir, read_from_index=True, end=20000)
+    # print(f'{balances=}')
     # index = get_sorted_index('datasets/blocks', end=600)
     # print(index[585], index[586])
 
