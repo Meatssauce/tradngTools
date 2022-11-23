@@ -26,21 +26,21 @@ def read_varint(file: IO):
 def varint2Bytes(num: int):
     """Turn decimal int into hexadecimal varint and then bytes"""
     if num <= 252:  # 0xfc
-        prefix = ''
+        prefix = b''
         length = 2
     elif num <= 65535:  # int('f' * 4, base=16)
-        prefix = 'fd'
+        prefix = b'\xfd'
         length = 4
     elif num <= 4294967295:  # int('f' * 8, base=16)
-        prefix = 'fe'
+        prefix = b'\xfe'
         length = 8
     elif num <= 18446744073709551615:  # int('f' * 16, base=16)
-        prefix = 'ff'
+        prefix = b'\xff'
         length = 16
     else:
         raise ValueError('num too large for varint')
 
-    return bytes.fromhex(f'{prefix}{num:0{length}x}')
+    return prefix + bytes.fromhex(f'{num:0{length}x}')[::-1]
 
 
 def decompress_pk(compressed: str):
@@ -200,8 +200,11 @@ class Input:
         return cls(tx_id, vout, scriptSig_size, scriptSig, sequence, coinbase)
 
     def to_bytes(self):
-        data = bytes.fromhex(self.tx_id)[::-1] + self.vout.to_bytes(4, byteorder='little') + \
-               varint2Bytes(self.scriptSig_size) + bytes.fromhex(self.scriptSig) + bytes.fromhex(self.sequence)[::-1]
+        data = bytes.fromhex(self.tx_id)[::-1] + \
+               self.vout.to_bytes(4, byteorder='little') + \
+               varint2Bytes(self.scriptSig_size) + \
+               bytes.fromhex(self.scriptSig) + \
+               bytes.fromhex(self.sequence)[::-1]
         return data
 
 
@@ -276,7 +279,8 @@ class Output:
         return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
 
     def to_bytes(self):
-        data = self.value.to_bytes(8, byteorder='little') + varint2Bytes(self.scriptPubKey_size) + \
+        data = self.value.to_bytes(8, byteorder='little') + \
+               varint2Bytes(self.scriptPubKey_size) + \
                bytes.fromhex(self.scriptPubKey)
         return data
 
@@ -323,7 +327,8 @@ class Transaction:
         return self
 
     def to_bytes(self):
-        data = bytes.fromhex(self.version)[::-1] + varint2Bytes(self.input_count) + \
+        data = bytes.fromhex(self.version)[::-1] + \
+               varint2Bytes(self.input_count) + \
                b''.join(input_.to_bytes() for input_ in self.inputs) + \
                varint2Bytes(self.output_count) + \
                b''.join(output.to_bytes() for output in self.outputs) + \
@@ -358,7 +363,7 @@ class Block:
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
-        magic_bytes = file.read(4)[::-1].hex()
+        magic_bytes = file.read(4).hex()
         size = int.from_bytes(file.read(4), byteorder='little')
         # block_header = f.read(80).hex()
 
@@ -385,8 +390,8 @@ class Block:
         return self
 
     def to_bytes(self):
-        magic_bytes = bytes.fromhex(self.magic_bytes)[::-1]
-        size = bytes.fromhex(f'{self.size:0{8}x}')[::-1]
+        magic_bytes = bytes.fromhex(self.magic_bytes)
+        size = self.size.to_bytes(4, byteorder='little')
 
         # header
         version = bytes.fromhex(self.version)[::-1]
