@@ -115,7 +115,7 @@ def build_ledger_history(location: str, read_from_index: bool = False, end: int 
         block_iter = read_dat(filepaths)
 
     for block_height, block in enumerate(block_iter):
-        if block.height == 51730:
+        if block.height == 51731:
                 pass
         if end is not None and block_height >= end - 1:
             return utxo, balances
@@ -140,18 +140,40 @@ def check_order(blocks_dir: str, end: int = None):
     return True
 
 
+# def get_sorted_index(blocks_dir: str, end: int = None):
+#     """Build an index of blocks (filename, position)"""
+#
+#     index = []
+#     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
+#
+#     for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
+#         if end is not None and i >= end:
+#             break
+#         index.append((block.time_, filepath, position))
+#
+#     return sorted(index, key=lambda x: x[0])
+
+
 def get_sorted_index(blocks_dir: str, end: int = None):
     """Build an index of blocks (filename, position)"""
 
-    index = []
+    block_info_dict = {}
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
 
     for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
         if end is not None and i >= end:
             break
-        index.append((block.time_, filepath, position))
+        block_info_dict[block.prev_block_hash] = (block, filepath, position)
 
-    return sorted(index, key=lambda x: x[0])
+    curr = min([i for i in block_info_dict.values()], key=lambda x: x[0].time_)
+    chain = [curr]
+
+    while len(chain) < len(block_info_dict):
+        next_ = block_info_dict[curr[0].id]
+        chain.append(next_)
+        curr = next_
+
+    return chain
 
 
 def build_index(blocks_dir: str, filename: str):

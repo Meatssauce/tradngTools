@@ -1,5 +1,6 @@
 import fileinput
 import hashlib
+import io
 from hashlib import sha256
 import re
 from dataclasses import dataclass
@@ -376,16 +377,18 @@ class Block:
         size = int.from_bytes(file.read(4), byteorder='little')
         # block_header = f.read(80).hex()
 
-        # header
-        version = file.read(4)[::-1].hex()
-        prev_block_hash = file.read(32)[::-1].hex()
-        merkle_root = file.read(32)[::-1].hex()
-        time_ = int.from_bytes(file.read(4), byteorder='little')
-        bits = int.from_bytes(file.read(4), byteorder='little')
-        nonce = int.from_bytes(file.read(4), byteorder='little')
+        data = io.BytesIO(file.read(size))
 
-        tx_count = read_varint(file)
-        transactions = [Transaction.from_file(file, coinbase=i == 0) for i in range(tx_count)]
+        # header
+        version = data.read(4)[::-1].hex()
+        prev_block_hash = data.read(32)[::-1].hex()
+        merkle_root = data.read(32)[::-1].hex()
+        time_ = int.from_bytes(data.read(4), byteorder='little')
+        bits = int.from_bytes(data.read(4), byteorder='little')
+        nonce = int.from_bytes(data.read(4), byteorder='little')
+
+        tx_count = read_varint(data)
+        transactions = [Transaction.from_file(data, coinbase=i == 0) for i in range(tx_count)]
 
         # for tx in transactions:
         #     if any(output.scriptPubKey_type != ScriptPubKeyType.P2PK for output in tx.outputs):
