@@ -12,36 +12,36 @@ from tools import hex2, Opcode, PKScriptType
 
 
 def read_varint(file: IO):
-    tx_count = file.read(1).hex()
+    tx_count = file.read(1)
 
-    if tx_count.startswith('fd'):
-        tx_count = file.read(2)[::-1].hex()
-    elif tx_count.startswith('fe'):
-        tx_count = file.read(4)[::-1].hex()
-    elif tx_count.startswith('ff'):
-        tx_count = file.read(8)[::-1].hex()
+    if tx_count.startswith(b'\xfd'):
+        tx_count = file.read(2)
+    elif tx_count.startswith(b'\xfe'):
+        tx_count = file.read(4)
+    elif tx_count.startswith(b'\xff'):
+        tx_count = file.read(8)
 
-    return int(tx_count, base=16)
+    return int.from_bytes(tx_count, byteorder='little')
 
 
 def varint2Bytes(num: int):
     """Turn decimal int into hexadecimal varint and then bytes"""
     if num <= 252:  # 0xfc
         prefix = b''
-        length = 2
+        length = 1
     elif num <= 65535:  # int('f' * 4, base=16)
         prefix = b'\xfd'
-        length = 4
+        length = 2
     elif num <= 4294967295:  # int('f' * 8, base=16)
         prefix = b'\xfe'
-        length = 8
+        length = 4
     elif num <= 18446744073709551615:  # int('f' * 16, base=16)
         prefix = b'\xff'
-        length = 16
+        length = 8
     else:
         raise ValueError('num too large for varint')
 
-    return prefix + bytes.fromhex(f'{num:0{length}x}')[::-1]
+    return prefix + num.to_bytes(length, byteorder='little')
 
 
 def decompress_pk(compressed: str):
