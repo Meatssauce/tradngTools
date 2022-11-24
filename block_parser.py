@@ -120,7 +120,6 @@ def update_ledger(block: Block,
 
 def build_ledger_history(location: str, result_dir: str, read_from_index: bool = False, end: int = None):
     """Build history of account balances from Bitcoin blocks"""
-
     os.makedirs(result_dir, exist_ok=True)
 
     prev_frame_time = None

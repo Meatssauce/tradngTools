@@ -2,7 +2,7 @@ import pytest
 import io
 
 from block_parser import read_dat
-from blockchain import read_varint, varint2Bytes
+from blockchain import read_varint, varint_to_bytes
 
 
 # from blockchain import key2Address
@@ -33,7 +33,7 @@ def test_read_varint():
 
 
 def test_varint2Bytes():
-    return varint2Bytes(106) == bytes.fromhex('6a')
+    return varint_to_bytes(106) == bytes.fromhex('6a')
 
 
 def test_read_and_inverse_read():
@@ -84,7 +84,7 @@ def test_index_and_read_from_index():
 
 
 def test_txid():
-    from blockchain import Transaction, varint2Bytes
+    from blockchain import Transaction, varint_to_bytes
     import io
 
     bytes_ = bytes.fromhex('01000000017967a5185e907a25225574544c31f7b059c1a191d65b53dcc1554d339c4f9efc010000006a47304402206a2eb16b7b92051d0fa38c133e67684ed064effada1d7f925c842da401d4f22702201f196b10e6e4b4a9fff948e5c5d71ec5da53e90529c8dbd122bff2b1d21dc8a90121039b7bcd0824b9a9164f7ba098408e63e5b7e3cf90835cceb19868f54f8961a825ffffffff014baf2100000000001976a914db4d1141d0048b1ed15839d0b7a4c488cd368b0e88ac00000000')

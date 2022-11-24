@@ -8,10 +8,11 @@ from typing import IO
 
 import bitcoin
 
-from tools import hex2, Opcode, PKScriptType
+from tools import Opcode, PKScriptType
 
 
 def read_varint(file: IO):
+    """Read decimal varint from file (bytes io)"""
     tx_count = file.read(1)
 
     if tx_count.startswith(b'\xfd'):
@@ -24,7 +25,7 @@ def read_varint(file: IO):
     return int.from_bytes(tx_count, byteorder='little')
 
 
-def varint2Bytes(num: int):
+def varint_to_bytes(num: int):
     """Turn decimal int into hexadecimal varint and then bytes"""
     if num <= 252:  # 0xfc
         prefix = b''
@@ -80,7 +81,6 @@ def split_public_keys(keys: str):
     :param keys: the string of public keys in hexadecimal to split
     :return: list of split keys
     """
-
     if not keys:
         return []
 
@@ -95,30 +95,12 @@ def split_public_keys(keys: str):
     return [pk] + split_public_keys(keys[2 + key_byte_count * 2:])
 
 
-# def read_varint_bytes(stream: bytes) -> tuple[int, int]:
-#     tx_count = file.read(1).hex()
-#     total_bytes_read = 1
-#
-#     if tx_count.startswith('fd'):
-#         tx_count = file.read(2)[::-1].hex()
-#         total_bytes_read += 2
-#     elif tx_count.startswith('fe'):
-#         tx_count = file.read(4)[::-1].hex()
-#         total_bytes_read += 4
-#     elif tx_count.startswith('ff'):
-#         tx_count = file.read(8)[::-1].hex()
-#         total_bytes_read += 8
-#
-#     return int(tx_count, base=16), total_bytes_read
-
-
-def hex2base58(payload: str):
+def hex_to_base58(payload: str):
     """Converts a hex string into a base58 string
 
     :param payload: the hexadecimal string to convert
     :return: corresponding base58 string
     """
-
     alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     sb = ''
     payload = int(payload, base=16)
@@ -129,13 +111,12 @@ def hex2base58(payload: str):
     return sb[::-1]
 
 
-def base58_2hex(payload: str):
+def base58_to_hex(payload: str):
     """Converts a base58 string into a hex string
 
     :param payload: the base58 string to convert
     :return: corresponding hexadecimal string
     """
-
     alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     symbol_to_quantity = {sym: i for i, sym in enumerate(alphabet)}
     payload = payload[::-1]
@@ -148,6 +129,7 @@ def base58_2hex(payload: str):
 
 
 def pk2pkh(payload: str):
+    """Converts an uncompressed public key to public key hash (ripemd160)"""
     return hashlib.new('ripemd160', sha256(bytes.fromhex(payload)).digest()).digest().hex()
 
 
@@ -158,11 +140,10 @@ def keyhash2address(payload: str, version: int):
     :param version: version prefix in decimal see https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
     :return: corresponding bitcoin address (Base58Check)
     """
-
     prefix = f'{version:0{2}x}'
     checksum = sha256(sha256(bytes.fromhex(prefix + payload)).digest()).digest()[:4].hex()  # only take first 4 bytes
     manual_leading_symbol = '1' if version == 0 else ''
-    return manual_leading_symbol + hex2base58(prefix + payload + checksum)
+    return manual_leading_symbol + hex_to_base58(prefix + payload + checksum)
 
 
 def address2keyhash(payload: str):
@@ -171,8 +152,7 @@ def address2keyhash(payload: str):
     :param payload: the bitcoin address to convert
     :return: corresponding public key hash (or script hash)
     """
-
-    return base58_2hex(payload[1:] if payload[0] == 1 else payload)[2:-8]
+    return base58_to_hex(payload[1:] if payload[0] == 1 else payload)[2:-8]
 
 
 @dataclass(frozen=True)
@@ -180,8 +160,8 @@ class Input:
     # Intrinsic properties
     tx_id: str  # that of a tx whose output we take as input
     vout: int  # index of input as an output in the tx
-    scriptSig_size: int  # number of bytes
-    scriptSig: str
+    sig_script_size: int  # number of bytes
+    sig_script: str
     sequence: str  # ignored
 
     # Derived properties
@@ -195,16 +175,16 @@ class Input:
     def from_file(cls, file: IO, coinbase: bool = False):
         tx_id = file.read(32)[::-1].hex()
         vout = int.from_bytes(file.read(4), byteorder='little')
-        scriptSig_size = read_varint(file)
-        scriptSig = file.read(scriptSig_size).hex()
+        sig_script_size = read_varint(file)
+        sig_script = file.read(sig_script_size).hex()
         sequence = file.read(4)[::-1].hex()
-        return cls(tx_id, vout, scriptSig_size, scriptSig, sequence, coinbase)
+        return cls(tx_id, vout, sig_script_size, sig_script, sequence, coinbase)
 
     def to_bytes(self):
         data = bytes.fromhex(self.tx_id)[::-1] + \
                self.vout.to_bytes(4, byteorder='little') + \
-               varint2Bytes(self.scriptSig_size) + \
-               bytes.fromhex(self.scriptSig) + \
+               varint_to_bytes(self.sig_script_size) + \
+               bytes.fromhex(self.sig_script) + \
                bytes.fromhex(self.sequence)[::-1]
         return data
 
@@ -213,44 +193,43 @@ class Input:
 class Output:
     # Intrinsic properties
     value: int  # amount of BTC in satoshis.
-    scriptPubKey_size: int  # number of bytes
-    scriptPubKey: str
+    pk_script_size: int  # number of bytes
+    pk_script: str
 
     # Derived properties
     coinbase: bool
 
     @property
-    def scriptPubKey_type(self):
+    def pk_script_type(self):
         for pattern in PKScriptType:
             if pattern == PKScriptType.NONSTANDARD:
                 continue
-            if re.search(f'{pattern}', self.scriptPubKey):
+            if re.search(f'{pattern}', self.pk_script):
                 return pattern
         return PKScriptType.NONSTANDARD
 
     @property
     def recipients(self):
         """Bitcoin address(es) or public key(s) to which the output instance is sent"""
-
-        if self.scriptPubKey_type == PKScriptType.P2PKH:
-            key = re.search(f'{PKScriptType.P2PKH}', self.scriptPubKey).group(1)
+        if self.pk_script_type == PKScriptType.P2PKH:
+            key = re.search(f'{PKScriptType.P2PKH}', self.pk_script).group(1)
             if len(key) == 42:
                 key = key[2:]
             return [keyhash2address(key, version=0)]
 
-        if self.scriptPubKey_type == PKScriptType.P2SH:
-            key = re.search(f'{PKScriptType.P2SH}', self.scriptPubKey).group(1)
+        if self.pk_script_type == PKScriptType.P2SH:
+            key = re.search(f'{PKScriptType.P2SH}', self.pk_script).group(1)
             if len(key) == 42:
                 key = key[2:]
             return [keyhash2address(key, version=5)]
 
-        if self.scriptPubKey_type == PKScriptType.P2MS:
-            keys = re.search(f'{PKScriptType.P2MS}', self.scriptPubKey).group(1)
+        if self.pk_script_type == PKScriptType.P2MS:
+            keys = re.search(f'{PKScriptType.P2MS}', self.pk_script).group(1)
             keys = split_public_keys(keys)
             return [bitcoin.pubkey_to_address(key) for key in keys]
 
-        if self.scriptPubKey_type == PKScriptType.P2PK:
-            key = re.search(f'{PKScriptType.P2PK}', self.scriptPubKey).group(1)
+        if self.pk_script_type == PKScriptType.P2PK:
+            key = re.search(f'{PKScriptType.P2PK}', self.pk_script).group(1)
             if len(key) == 132:
                 key = key[2:]
             elif len(key) != 130:
@@ -268,21 +247,21 @@ class Output:
         null_data = f'^{Opcode.RETURN}([0-9a-f]*)$'
 
         try:
-            return re.search(null_data, self.scriptPubKey).group(1)
+            return re.search(null_data, self.pk_script).group(1)
         except AttributeError as exc:
             raise ValueError('Failed to match scriptPubKey against any known pattern.') from exc
 
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
         value = int.from_bytes(file.read(8), byteorder='little')
-        scriptPubKey_size = read_varint(file)
-        scriptPubKey = file.read(scriptPubKey_size).hex()
-        return cls(value, scriptPubKey_size, scriptPubKey, coinbase)
+        pk_script_size = read_varint(file)
+        pk_script = file.read(pk_script_size).hex()
+        return cls(value, pk_script_size, pk_script, coinbase)
 
     def to_bytes(self):
         data = self.value.to_bytes(8, byteorder='little') + \
-               varint2Bytes(self.scriptPubKey_size) + \
-               bytes.fromhex(self.scriptPubKey)
+               varint_to_bytes(self.pk_script_size) + \
+               bytes.fromhex(self.pk_script)
         return data
 
 
@@ -329,9 +308,9 @@ class Transaction:
 
     def to_bytes(self):
         data = bytes.fromhex(self.version)[::-1] + \
-               varint2Bytes(self.input_count) + \
+               varint_to_bytes(self.input_count) + \
                b''.join(input_.to_bytes() for input_ in self.inputs) + \
-               varint2Bytes(self.output_count) + \
+               varint_to_bytes(self.output_count) + \
                b''.join(output.to_bytes() for output in self.outputs) + \
                bytes.fromhex(self.locktime)[::-1]
         return data
@@ -409,7 +388,7 @@ class Block:
         magic_bytes = bytes.fromhex(self.magic_bytes)
         size = self.size.to_bytes(4, byteorder='little')
         header = self.header.to_bytes()
-        tx_count = varint2Bytes(self.tx_count)
+        tx_count = varint_to_bytes(self.tx_count)
         transactions = b''.join(tx.to_bytes() for tx in self.transactions)
 
         data = magic_bytes + size + header + tx_count + transactions
