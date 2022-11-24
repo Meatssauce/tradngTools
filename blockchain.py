@@ -338,13 +338,7 @@ class Transaction:
 
 
 @dataclass(frozen=True)
-class Block:
-    # Intrinsic properties
-    magic_bytes: str
-    size: int  # number of bytes
-
-    # block_header = f.read(80).hex()
-
+class Header:
     version: str
     prev_block_hash: str
     merkle_root: str
@@ -352,6 +346,38 @@ class Block:
     bits: int
     nonce: int
 
+    @classmethod
+    def from_file(cls, file: IO | fileinput.FileInput):
+        version = file.read(4)[::-1].hex()
+        prev_block_hash = file.read(32)[::-1].hex()
+        merkle_root = file.read(32)[::-1].hex()
+        time_ = int.from_bytes(file.read(4), byteorder='little')
+        bits = int.from_bytes(file.read(4), byteorder='little')
+        nonce = int.from_bytes(file.read(4), byteorder='little')
+        return cls(version, prev_block_hash, merkle_root, time_, bits, nonce)
+
+    def to_bytes(self):
+        # header
+        version = bytes.fromhex(self.version)[::-1]
+        prev_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
+        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
+        time_ = self.time_.to_bytes(4, byteorder='little')
+        bits = self.bits.to_bytes(4, byteorder='little')
+        nonce = self.nonce.to_bytes(4, byteorder='little')
+
+        data = version + prev_block_hash + merkle_root + time_ + bits + nonce
+
+        assert len(data) == 80
+
+        return data
+
+
+@dataclass(frozen=True)
+class Block:
+    # Intrinsic properties
+    magic_bytes: str
+    size: int  # number of bytes
+    header: Header
     tx_count: int
     transactions: list[Transaction]
 
@@ -360,43 +386,21 @@ class Block:
 
     @property
     def id(self):
-        version = bytes.fromhex(self.version)[::-1]
-        pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
-        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        time_ = self.time_.to_bytes(4, byteorder='little')
-        bits = self.bits.to_bytes(4, byteorder='little')
-        nonce = self.nonce.to_bytes(4, byteorder='little')
-
-        header = version + pre_block_hash + merkle_root + time_ + bits + nonce
-
-        return sha256(sha256(header).digest()).digest()[::-1].hex()
+        header_bytes = self.header.to_bytes()
+        return sha256(sha256(header_bytes).digest()).digest()[::-1].hex()
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
         magic_bytes = file.read(4).hex()
         size = int.from_bytes(file.read(4), byteorder='little')
-        # block_header = f.read(80).hex()
 
         data = io.BytesIO(file.read(size))
 
-        # header
-        version = data.read(4)[::-1].hex()
-        prev_block_hash = data.read(32)[::-1].hex()
-        merkle_root = data.read(32)[::-1].hex()
-        time_ = int.from_bytes(data.read(4), byteorder='little')
-        bits = int.from_bytes(data.read(4), byteorder='little')
-        nonce = int.from_bytes(data.read(4), byteorder='little')
-
+        header = Header.from_file(data)
         tx_count = read_varint(data)
         transactions = [Transaction.from_file(data, coinbase=i == 0) for i in range(tx_count)]
 
-        # for tx in transactions:
-        #     if any(output.scriptPubKey_type != ScriptPubKeyType.P2PK for output in tx.outputs):
-        #         break
-
-        self = cls(magic_bytes, size,
-                   version, prev_block_hash, merkle_root, time_, bits, nonce,
-                   tx_count, transactions, height)
+        self = cls(magic_bytes, size, header, tx_count, transactions, height)
         PastBlocks()[self.id] = self
 
         return self
@@ -404,20 +408,11 @@ class Block:
     def to_bytes(self):
         magic_bytes = bytes.fromhex(self.magic_bytes)
         size = self.size.to_bytes(4, byteorder='little')
-
-        # header
-        version = bytes.fromhex(self.version)[::-1]
-        pre_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
-        merkle_root = bytes.fromhex(self.merkle_root)[::-1]
-        time_ = self.time_.to_bytes(4, byteorder='little')
-        bits = self.bits.to_bytes(4, byteorder='little')
-        nonce = self.nonce.to_bytes(4, byteorder='little')
-
+        header = self.header.to_bytes()
         tx_count = varint2Bytes(self.tx_count)
         transactions = b''.join(tx.to_bytes() for tx in self.transactions)
 
-        data = (magic_bytes + size + version + pre_block_hash + merkle_root + time_ + bits + nonce +
-                tx_count + transactions)
+        data = magic_bytes + size + header + tx_count + transactions
 
         return data
 
