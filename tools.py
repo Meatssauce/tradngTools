@@ -1,7 +1,10 @@
+from abc import abstractmethod
 from enum import Enum
 from typing import IO
 
 from tqdm import tqdm
+
+from blockchain import Block, read_varint
 
 
 def hex2(n):

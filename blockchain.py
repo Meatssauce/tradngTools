@@ -1,6 +1,7 @@
 import fileinput
 import hashlib
 import io
+from abc import abstractmethod
 from hashlib import sha256
 import re
 from dataclasses import dataclass
@@ -268,7 +269,7 @@ class Output:
 @dataclass(frozen=True)
 class Transaction:
     # Intrinsic properties
-    version: str
+    version: int
     # witness: bool
     input_count: int
     inputs: list[Input]
@@ -289,25 +290,20 @@ class Transaction:
 
     @classmethod
     def from_file(cls, file: IO, coinbase: bool = False):
-        version = file.read(4)[::-1].hex()
+        version = int.from_bytes(file.read(4), byteorder='little')
+        file.seek(-4, 1)
 
         # witness = file.read(2).hex()
 
-        input_count = read_varint(file)
-        inputs = [Input.from_file(file, coinbase) for _ in range(input_count)]
+        strategy_by_version = {1: NonWitTxFromBytesStrategy}
+        self = strategy_by_version[version].from_bytes(file, coinbase)
 
-        output_count = read_varint(file)
-        outputs = [Output.from_file(file, coinbase) for _ in range(output_count)]
-
-        locktime = file.read(4)[::-1].hex()
-
-        self = cls(version, input_count, inputs, output_count, outputs, locktime, coinbase)
         PastTransactions()[self.id] = self
 
         return self
 
     def to_bytes(self):
-        data = bytes.fromhex(self.version)[::-1] + \
+        data = self.version.to_bytes(4, byteorder='little') + \
                varint_to_bytes(self.input_count) + \
                b''.join(input_.to_bytes() for input_ in self.inputs) + \
                varint_to_bytes(self.output_count) + \
@@ -318,7 +314,7 @@ class Transaction:
 
 @dataclass(frozen=True)
 class Header:
-    version: str
+    version: int
     prev_block_hash: str
     merkle_root: str
     time_: int
@@ -327,7 +323,7 @@ class Header:
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput):
-        version = file.read(4)[::-1].hex()
+        version = int.from_bytes(file.read(4), byteorder='little')
         prev_block_hash = file.read(32)[::-1].hex()
         merkle_root = file.read(32)[::-1].hex()
         time_ = int.from_bytes(file.read(4), byteorder='little')
@@ -337,7 +333,7 @@ class Header:
 
     def to_bytes(self):
         # header
-        version = bytes.fromhex(self.version)[::-1]
+        version = self.version.to_bytes(4, byteorder='little')
         prev_block_hash = bytes.fromhex(self.prev_block_hash)[::-1]
         merkle_root = bytes.fromhex(self.merkle_root)[::-1]
         time_ = self.time_.to_bytes(4, byteorder='little')
@@ -370,30 +366,20 @@ class Block:
 
     @classmethod
     def from_file(cls, file: IO | fileinput.FileInput, height: int = 0):
-        magic_bytes = file.read(4).hex()
-        size = int.from_bytes(file.read(4), byteorder='little')
+        file.seek(4 + 4, 1)
+        version = int.from_bytes(file.read(4), byteorder='little')
+        file.seek(-(4 + 4 + 4), 1)
 
-        data = io.BytesIO(file.read(size))
+        strategy_by_version = {1: BlockV1FromBytesStrategy, 2: BlockV2FromBytesStrategy}
+        self = strategy_by_version[version].from_bytes(file, height=height)
 
-        header = Header.from_file(data)
-        tx_count = read_varint(data)
-        transactions = [Transaction.from_file(data, coinbase=i == 0) for i in range(tx_count)]
-
-        self = cls(magic_bytes, size, header, tx_count, transactions, height)
         PastBlocks()[self.id] = self
 
         return self
 
     def to_bytes(self):
-        magic_bytes = bytes.fromhex(self.magic_bytes)
-        size = self.size.to_bytes(4, byteorder='little')
-        header = self.header.to_bytes()
-        tx_count = varint_to_bytes(self.tx_count)
-        transactions = b''.join(tx.to_bytes() for tx in self.transactions)
-
-        data = magic_bytes + size + header + tx_count + transactions
-
-        return data
+        strategy_by_version = {1: BlockV1ToBytesStrategy, 2: BlockV2ToBytesStrategy}
+        return strategy_by_version[self.header.version].to_bytes(self)
 
 
 class Singleton(type):
@@ -411,3 +397,83 @@ class PastBlocks(dict, metaclass=Singleton):
 
 class PastTransactions(dict, metaclass=Singleton):
     pass
+
+
+class BlockFromBytesStrategy:
+
+    @staticmethod
+    @abstractmethod
+    def from_bytes(file: IO | fileinput.FileInput, **kwargs) -> Block:
+        pass
+
+
+class BlockV1FromBytesStrategy(BlockFromBytesStrategy):
+    @staticmethod
+    def from_bytes(file: IO | fileinput, height: int = None, **kwargs) -> Block:
+        magic_bytes = file.read(4).hex()
+        size = int.from_bytes(file.read(4), byteorder='little')
+        header = Header.from_file(file)
+        tx_count = read_varint(file)
+        transactions = [Transaction.from_file(file, coinbase=i == 0) for i in range(tx_count)]
+
+        return Block(magic_bytes, size, header, tx_count, transactions, height)
+
+
+class BlockV2FromBytesStrategy(BlockFromBytesStrategy):
+    @staticmethod
+    def from_bytes(file: IO | fileinput.FileInput, **kwargs) -> Block:
+        temp = BlockV1FromBytesStrategy.from_bytes(file)
+        height = BlockV2FromBytesStrategy.read_height(temp.transactions[0].inputs[0].sig_script)
+        return Block(temp.magic_bytes, temp.size, temp.header, temp.tx_count, temp.transactions, height)
+
+    @staticmethod
+    def read_height(sig_script: str):
+        size = int(sig_script[:2], base=16)
+        height = int.from_bytes(bytes.fromhex(sig_script[2:])[:size], byteorder='little')
+        return height
+
+
+class BlockToBytesStrategy:
+    @staticmethod
+    @abstractmethod
+    def to_bytes(block) -> bytes:
+        pass
+
+
+class BlockV1ToBytesStrategy(BlockToBytesStrategy):
+    @staticmethod
+    def to_bytes(block) -> bytes:
+        magic_bytes = bytes.fromhex(block.magic_bytes)
+        size = block.size.to_bytes(4)
+        header = block.header.to_bytes()
+        tx_count = varint_to_bytes(block.tx_count)
+        transactions = b''.join(tx.to_bytes() for tx in block.transactions)
+
+        return magic_bytes + size + header + tx_count + transactions
+
+
+class BlockV2ToBytesStrategy(BlockV1ToBytesStrategy):
+    pass
+
+
+class TransactionFromBytesStrategy:
+    @staticmethod
+    @abstractmethod
+    def from_bytes(file: IO | fileinput.FileInput, **kwargs) -> Transaction:
+        pass
+
+
+class NonWitTxFromBytesStrategy(TransactionFromBytesStrategy):
+    @staticmethod
+    def from_bytes(file: IO | fileinput.FileInput, coinbase: bool = False, **kwargs) -> Transaction:
+        version = int.from_bytes(file.read(4), byteorder='little')
+
+        input_count = read_varint(file)
+        inputs = [Input.from_file(file, coinbase) for _ in range(input_count)]
+
+        output_count = read_varint(file)
+        outputs = [Output.from_file(file, coinbase) for _ in range(output_count)]
+
+        locktime = file.read(4)[::-1].hex()
+
+        return Transaction(version, input_count, inputs, output_count, outputs, locktime, coinbase)

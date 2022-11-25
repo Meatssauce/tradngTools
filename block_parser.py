@@ -142,26 +142,67 @@ def build_ledger_history(location: str, result_dir: str, read_from_index: bool =
         if end is not None and block_height >= end - 1:
             break
 
-        balances = update_ledger(block, balances)
+        try:
+            balances = update_ledger(block, balances)
+        except ValueError:
+            continue
 
         if not prev_frame_time:
-            prev_frame_time = block.time_
-        curr_time = block.time_
+            prev_frame_time = block.header.time_
+        curr_time = block.header.time_
 
         # record a snapshot of balances
-        if datetime.timedelta(seconds=curr_time - prev_frame_time) >= datetime.timedelta(weeks=1):
+        if datetime.timedelta(seconds=curr_time - prev_frame_time) >= datetime.timedelta(days=3):
             prev_frame_time = curr_time
             time_label = pd.to_datetime(curr_time, unit='s')
-            df = pd.DataFrame(balances.values(), index=list(balances.keys()), columns=[time_label])
+
+            data = balanceTiers(balances)
+
+            df = pd.DataFrame(data.values(), index=list(data.keys()), columns=[time_label])
             frames.append(df)
 
         # save to disk
-        if sys.getsizeof(frames) > 256 * 1024:
+        if len(frames) >= 100_000:
             pd.concat(frames).to_csv(os.path.join(result_dir, f'ledger{i:03}.csv'))
             frames = []
             i += 1
 
     pd.concat(frames).to_csv(os.path.join(result_dir, f'ledger{i:03}.csv'))
+
+
+def balanceTiers(balances: dict):
+    data = {'shrimps': 0,  # less than 1 BTC
+            'crabs': 0,  # 1 to 10 BTC
+            'octopuses': 0,  # 10 to 50 BTC
+            'fish': 0,  # 50 to 100 BTC
+            'dolphins': 0,  # 100 to 500 BTC
+            'sharks': 0,  # 500 to 1_000 BTC
+            'whales': 0,  # 1_000 to 5_000 BTC
+            'humpback': 0,  # 5_000 to 10_000 BTC
+            'kraken': 0,  # >10_000 BTC
+            }
+
+    for balance in balances.values():
+        if balance < 1:
+            data['shrimps'] += 1
+        elif balance < 10:
+            data['crabs'] += 1
+        elif balance < 50:
+            data['octopuses'] += 1
+        elif balance < 100:
+            data['fish'] += 1
+        elif balance < 500:
+            data['dolphins'] += 1
+        elif balance < 1_000:
+            data['sharks'] += 1
+        elif balance < 5_000:
+            data['whales'] += 1
+        elif balance < 10_000:
+            data['humpback'] += 1
+        else:
+            data['kraken'] += 1
+
+    return data
 
 
 def check_order(blocks_dir: str, end: int = None):
@@ -180,16 +221,16 @@ def check_order(blocks_dir: str, end: int = None):
     return True
 
 
-def get_sorted_index(blocks_dir: str, end: int = None):
+def get_sorted_index(blocks_dir: str, start: int = 0, end: int = None):
     """Build an index of blocks (filename, position)"""
 
-    index = []
     filepaths = glob.glob(os.path.join(blocks_dir, 'blk*.dat'))
+    if end is None:
+        end = len(filepaths)
+    filepaths = filepaths[start:end]
 
-    for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True)):
-        if end is not None and i >= end:
-            break
-        index.append((block.time_, filepath, position))
+    index = [(block.time_, filepath, position)
+             for i, (filepath, position, block) in enumerate(read_dat(filepaths, return_index=True))]
 
     return sorted(index, key=lambda x: x[0])
 
@@ -222,13 +263,13 @@ def build_index(blocks_dir: str, filename: str):
 
 
 def main():
-    blocks_dir = 'datasets/blocks'
-    index_filepath = 'datasets/blocks/index.csv'
+    blocks_dir = r'D:\Bitcoin\blocks'
+    index_filepath = r'D:\Bitcoin\blocks\index.csv'
     results_dir = 'results'
 
-    if not os.path.isfile(index_filepath):
-        build_index(blocks_dir, index_filepath)
-    build_ledger_history(index_filepath, result_dir=results_dir, read_from_index=True, end=20000)
+    # if not os.path.isfile(index_filepath):
+    #     build_index(blocks_dir, index_filepath)
+    build_ledger_history(blocks_dir, result_dir=results_dir, read_from_index=False)
     # print(f'{balances=}')
     # index = get_sorted_index('datasets/blocks', end=600)
     # print(index[585], index[586])
