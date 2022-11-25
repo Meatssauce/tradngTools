@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import MinMaxScaler
 
+from models import make_vanilla, make_vanilla_v2
 from mydata import load_data
 
 
@@ -117,53 +118,9 @@ train_data = np.stack(make_standardised_segments(train_data, window_length, wind
 val_data = np.stack(make_standardised_segments(val_data, window_length, window_range, stride))
 test_data = np.stack(make_standardised_segments(test_data, window_length, window_range, stride))
 
-kernel_size = 5
-
-model = tf.keras.Sequential(
-    [
-        tf.keras.layers.Input(shape=(512, 5)),
-        # tf.keras.layers.Conv1D(
-        #     filters=16, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        # tf.keras.layers.Conv1D(
-        #     filters=32, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        # tf.keras.layers.Conv1D(
-        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        tf.keras.layers.Conv1D(
-            filters=32, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
-        ),
-        tf.keras.layers.Dropout(rate=0.2),
-        tf.keras.layers.Conv1D(
-            filters=16, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
-        ),
-
-        tf.keras.layers.Conv1DTranspose(
-            filters=16, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
-        ),
-        tf.keras.layers.Dropout(rate=0.2),
-        tf.keras.layers.Conv1DTranspose(
-            filters=32, kernel_size=kernel_size, padding="same", strides=2, activation="relu"
-        ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        # tf.keras.layers.Conv1DTranspose(
-        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        # tf.keras.layers.Conv1DTranspose(
-        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        # tf.keras.layers.Dropout(rate=0.2),
-        # tf.keras.layers.Conv1DTranspose(
-        #     filters=64, kernel_size=5, padding="same", strides=2, activation="relu"
-        # ),
-        tf.keras.layers.Conv1DTranspose(filters=5, kernel_size=kernel_size, padding="same"),
-    ]
-)
+input_shape = train_data[0].shape
+model = make_vanilla_v2(kernel_size=5, input_size=input_shape)
+print(f'{input_shape=}')
 
 # lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
 #     initial_learning_rate=0.01,
@@ -173,7 +130,7 @@ model = tf.keras.Sequential(
 #     cycle=False,
 #     name=None
 # )
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss="mse")
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005), loss="mse")
 model.summary()
 
 history = model.fit(
@@ -183,7 +140,7 @@ history = model.fit(
     epochs=50,
     validation_data=(val_data, val_data),
     callbacks=[
-        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=5, mode="min")
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=20, mode="min")
     ],
     verbose=1
 )
@@ -196,6 +153,9 @@ os.makedirs(output_dir, exist_ok=True)
 with open(os.path.join(output_dir, 'trainHistoryDict.json'), 'w') as f:
     json.dump(history.history, f)
 
+# Save model
+model.save('vanilla_autoencoder.model')
+
 print(model.evaluate(test_data, test_data))
 
 test_pred = model.predict(test_data)
@@ -207,3 +167,10 @@ for i, title in enumerate(['Open', 'High', 'Low', 'Close', 'Volume']):
     plt.legend()
     plt.savefig(os.path.join(output_dir, title + '.png'))
     plt.show()
+
+# Save encoder and decoder
+model.layers[0].save('vanilla_encoder.model')
+model.layers[1].save('vanilla_decoder.model')
+print(model.layers)
+
+# print(tf.keras.models.load_model('vanilla_encoder.model').predict(test_data).shape)
