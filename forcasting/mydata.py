@@ -36,7 +36,7 @@ def _load_securities_us():
 
     print(f'{len(malformed_files)} out of {total_file_count} not loaded due to empty data.')
 
-    df.to_csv('datasets/us-stocks-ETF_USD-daily_data.csv')
+    df.to_csv('datasets/us-stocks-ETF_USD-daily_data.csv', index=False)
 
     return pd.concat(all_dfs)
 
@@ -51,15 +51,15 @@ _filenames = {
 }
 
 
-def load_data(dataset: str, reload: bool = False) -> pd.DataFrame:
+def load_data(dataset: str, reset_cache: bool = False) -> pd.DataFrame:
     """Load data with fixed index
 
     :param dataset: `btc` or `securities`
-    :param reload: set to True to force reloading
+    :param reset_cache: set to True to force reloading
     :return: a pandas Dataframe object
     """
 
     filepath = _filenames[dataset]
-    if reload or not os.path.exists(filepath):
+    if reset_cache or not os.path.exists(filepath):
         return _loaders[dataset]()
     return pd.read_csv(filepath)
