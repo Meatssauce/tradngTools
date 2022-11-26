@@ -8,7 +8,7 @@ from typing import IO
 
 import bitcoin
 
-from tools import Opcode, PKScriptType
+from .tools import Opcode, PKScriptType
 
 
 def read_varint(file: IO):

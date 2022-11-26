@@ -1,8 +1,7 @@
-import pytest
 import io
 
-from block_parser import read_dat
-from blockchain import read_varint, varint_to_bytes
+from blockchain_datamining.block_parser import read_dat
+from blockchain_datamining.blockchain import read_varint, varint_to_bytes
 
 
 # from blockchain import key2Address
@@ -58,7 +57,7 @@ def test_read_and_inverse_read():
 
 
 def test_decompress_pk():
-    from blockchain import decompress_pk
+    from blockchain_datamining.blockchain import decompress_pk
     inputs = ['0229b3e0919adc41a316aad4f41444d9bf3a9b639550f2aa735676ffff25ba3898',
               '02f15446771c5c585dd25d8d62df5195b77799aa8eac2f2196c54b73ca05f72f27']
     outputs = ['0429b3e0919adc41a316aad4f41444d9bf3a9b639550f2aa735676ffff25ba3898d6881e81d2e0163348ff07b3a9a3968401572aa79c79e7edb522f41addc8e6ce',
@@ -69,7 +68,7 @@ def test_decompress_pk():
 
 
 def test_index_and_read_from_index():
-    from block_parser import build_index, read_dat_from_index, read_dat
+    from blockchain_datamining.block_parser import build_index, read_dat_from_index, read_dat
     import glob
     import os
 
@@ -84,7 +83,7 @@ def test_index_and_read_from_index():
 
 
 def test_txid():
-    from blockchain import Transaction, varint_to_bytes
+    from blockchain_datamining.blockchain import Transaction
     import io
 
     bytes_ = bytes.fromhex('01000000017967a5185e907a25225574544c31f7b059c1a191d65b53dcc1554d339c4f9efc010000006a47304402206a2eb16b7b92051d0fa38c133e67684ed064effada1d7f925c842da401d4f22702201f196b10e6e4b4a9fff948e5c5d71ec5da53e90529c8dbd122bff2b1d21dc8a90121039b7bcd0824b9a9164f7ba098408e63e5b7e3cf90835cceb19868f54f8961a825ffffffff014baf2100000000001976a914db4d1141d0048b1ed15839d0b7a4c488cd368b0e88ac00000000')
@@ -94,7 +93,7 @@ def test_txid():
 
 
 def test_address_convertion():
-    from blockchain import keyhash2address, address2keyhash
+    from blockchain_datamining.blockchain import keyhash2address, address2keyhash
 
     inputs = [('99064703cef4618dea719d4325d3a26a20ba8561', 0), ('b249d91635b16e133f4872ee9d6585ac276e12b6', 5)]
     outputs = ['1Ex7uWfxnXrSnhVDJsDhaifkDnB8GgcgAG', '3Hwifjme6jmeufi8YPZCfL1efG6NNGBhR2']

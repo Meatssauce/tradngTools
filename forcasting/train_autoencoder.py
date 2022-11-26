@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import MinMaxScaler
 
-from models import make_vanilla, make_vanilla_v2
-from mydata import load_data
+from .models import make_vanilla, make_vanilla_v2
+from .mydata import load_data
 
 
 def vectorized_stride(array, length, stride):
@@ -147,7 +147,7 @@ history = model.fit(
 
 # Save training logs
 
-output_dir = 'trainingLog'
+output_dir = '../trainingLog'
 os.makedirs(output_dir, exist_ok=True)
 
 with open(os.path.join(output_dir, 'trainHistoryDict.json'), 'w') as f:

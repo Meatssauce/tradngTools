@@ -260,9 +260,9 @@ def parseBlocks(blocks_dir: str, results_dir: str):
 
 
 def main():
-    blocks_dir = 'datasets/blocks/'
-    index_filepath = 'datasets/blocks/index.csv'
-    results_dir = 'results/'
+    blocks_dir = '../datasets/blocks/'
+    index_filepath = '../datasets/blocks/index.csv'
+    results_dir = '../results/'
 
     os.makedirs(results_dir, exist_ok=True)
     parseBlocks(blocks_dir, results_dir)

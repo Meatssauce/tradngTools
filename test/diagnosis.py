@@ -2,7 +2,7 @@ import cProfile
 import pstats
 import os
 
-from block_parser import build_index, build_ledger_history
+from blockchain_datamining.block_parser import build_index, build_ledger_history
 
 
 def main():

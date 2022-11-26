@@ -13,8 +13,8 @@ from typing import IO
 import pandas as pd
 from tqdm import tqdm
 
-from blockchain import Block, Output, Input
-from tools import ReadableFileInput, Opcode
+from .blockchain import Block, Output, Input
+from .tools import ReadableFileInput, Opcode
 
 
 def make_merkle_root(lst):  # https://gist.github.com/anonymous/7eb080a67398f648c1709e41890f8c44
@@ -222,9 +222,9 @@ def build_index(blocks_dir: str, filename: str):
 
 
 def main():
-    blocks_dir = 'datasets/blocks'
-    index_filepath = 'datasets/blocks/index.csv'
-    results_dir = 'results'
+    blocks_dir = '../datasets/blocks'
+    index_filepath = '../datasets/blocks/index.csv'
+    results_dir = '../results'
 
     if not os.path.isfile(index_filepath):
         build_index(blocks_dir, index_filepath)

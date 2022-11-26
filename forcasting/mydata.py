@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 def _load_btc_bitstamp():
-    return pd.read_csv('datasets/bitstampUSD_1-min_data_2012-01-01_to_2021-03-31.csv', index_col=False)
+    return pd.read_csv('../datasets/bitstampUSD_1-min_data_2012-01-01_to_2021-03-31.csv', index_col=False)
 
 
 def _load_securities_us():
@@ -54,7 +54,7 @@ _filenames = {
 def load_data(dataset: str, reload: bool = False) -> pd.DataFrame:
     """Load data with fixed index
 
-    :param dataset: `btc` or `securitiess`
+    :param dataset: `btc` or `securities`
     :param reload: set to True to force reloading
     :return: a pandas Dataframe object
     """
